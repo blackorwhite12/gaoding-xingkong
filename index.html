@@ -732,6 +732,9 @@ let lastDragMoved = false;
 let currentSlotPx = 86;
 let bootEntered = false;         /* 是否已进入主界面（DEMO 红温提示用） */
 let appVisible = false;          /* 开屏是否完全消失（提示只在完全进入后弹） */
+let flipFloat = 0;               /* 合拢翻页：堆叠显示偏移（float，逐帧缓动） */
+let flipTarget = 0;
+let lastFlip = 0;                /* 最近翻页时间（闲置后红温恢复顶置） */
 let timeScale = 1;               /* 爆炸慢动作：0~1 时间缩放 */
 function slowmo(scale, ms) {
     timeScale = scale;
@@ -1105,6 +1108,7 @@ ringBurst.addEventListener('pointerdown', e => {
     const card = e.target.closest('.rb-card');
     if (!card || e.target.closest('input,textarea,button')) return;
     dragActive = true;
+    burstHoverEl = null;                         /* 拖拽开始时清掉悬停高亮 */
     const rect = card.getBoundingClientRect();
     pointerDrag = {
         sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: false,
@@ -1130,7 +1134,12 @@ window.addEventListener('pointermove', e => {
         }
     }
     if (pointerDrag.mode === 'h') {
-        fanOffset = dx / currentSlotPx;    /* 整环 1:1 跟手 */
+        if (burstCurrent < 0.5) {
+            flipFloat = flipTarget + dx / currentSlotPx;   /* 合拢翻页跟手 */
+            lastFlip = Date.now();
+        } else {
+            fanOffset = dx / currentSlotPx;                /* 展开：整环 1:1 跟手 */
+        }
         return;
     }
     if (pointerDrag.mode === 'v' && vDrag && pointerDrag.el === vDrag.el) {
@@ -1180,11 +1189,18 @@ function endDrag() {
     steps = Math.max(-6, Math.min(6, steps));   /* 单次最多连滑 6 格 */
     const dir = steps > 0 ? 1 : -1;
     const n = Math.abs(steps);
-    if (n > 0) {
-        for (let s = 0; s < n; s++) rotateRing(dir);   /* 循环旋转并定格，不弹回 */
-        fanOffset = d.dx / currentSlotPx - dir * n;    /* 消除跳变，平滑归位 */
+    if (burstCurrent < 0.5) {
+        /* 合拢：翻页（切换堆叠最上面那张），手势优先于红温顶置 */
+        flipTarget += dir * n;
+        flipFloat = flipTarget + d.dx / currentSlotPx - dir * n;
+        lastFlip = Date.now();
     } else {
-        fanOffset = d.dx / currentSlotPx;              /* 不足半格 → 吸附回原格 */
+        if (n > 0) {
+            for (let s = 0; s < n; s++) rotateRing(dir);   /* 循环旋转并定格，不弹回 */
+            fanOffset = d.dx / currentSlotPx - dir * n;    /* 消除跳变，平滑归位 */
+        } else {
+            fanOffset = d.dx / currentSlotPx;              /* 不足半格 → 吸附回原格 */
+        }
     }
 }
 window.addEventListener('pointerup', endDrag);
@@ -1217,6 +1233,10 @@ function resetBurst() {
 function burstLayout() {
     if (!vDrag) checkUrgency();                /* 预警项自动顶置（拖拽中不打断） */
     burstCurrent += (burstTarget - burstCurrent) * 0.12 * timeScale;
+    /* 合拢翻页：逐帧缓动；闲置 8 秒后红温恢复顶置 */
+    flipFloat += (flipTarget - flipFloat) * 0.14 * timeScale;
+    if (Math.abs(flipTarget - flipFloat) < 0.01) flipFloat = flipTarget;
+    if (flipTarget !== 0 && Date.now() - lastFlip > 8000) flipTarget = 0;
     /* 松手后惯性滑回/回弹 */
     if (!dragActive && Math.abs(fanOffset) > 0.005) {
         fanOffset += (0 - fanOffset) * 0.14 * timeScale;
@@ -1241,9 +1261,11 @@ function burstLayout() {
         const ay = RB_CY - Math.cos(angle) * RB_ARC_R * 0.62 + RB_ARC_R * 0.05;
         /* 收拢锚定：合拢时按截止时间叠放（最近在最上面），展开时按环位置排 */
         const basePosV = c._basePos != null ? c._basePos : i;
-        const stackBlend = (c._stackRank != null ? c._stackRank : 0) + (basePosV - (c._stackRank != null ? c._stackRank : 0)) * eased;
+        const rank0 = c._stackRank != null ? c._stackRank : 0;
+        const dispRank = ((rank0 + flipFloat) % N + N) % N;    /* 翻页：堆叠显示偏移 */
+        const stackBlend = dispRank + (basePosV - dispRank) * eased;
         const collapsedMode = eased < 0.5;
-        const orderVal = collapsedMode ? (c._stackRank != null ? c._stackRank : 0) : basePosV;
+        const orderVal = collapsedMode ? dispRank : basePosV;
         /* 右手炸星：合拢时最近的那张在右侧最上面，后面的往左上方收 */
         const midN = (N - 1) / 2;
         const sx = RB_CX + (midN - stackBlend) * 5.5;
