@@ -2135,8 +2135,8 @@ function playBootIntro() {
          .to({}, { duration: 4.0, onComplete: enterApp });   /* 等待也能自动进入 */
 }
 playBootIntro();
-/* 点击方框文字（或开屏任意处）→ 立即进入 */
-document.getElementById('boot-screen').addEventListener('click', () => {
+/* 只保留方框里的链接可点击 → 立即进入（等待也会自动进入） */
+document.querySelector('.boot-sub').addEventListener('click', () => {
     enterApp();
     sfx.click();
 });
