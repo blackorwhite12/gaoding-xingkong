@@ -1742,12 +1742,19 @@ function liftCapsule(id, on) {
 /* 语音输入（浏览器原生语音识别） */
 let rec = null;
 let voiceManualStop = false;
-function startVoice() {
+let voiceMode = 'todo';          /* 'todo' 建待办 / 'search' 语音搜索 */
+function startVoice(mode) {
+    voiceMode = mode || 'todo';
     liftCapsule('input-capsule', true);
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { openKeyboard(); toast('当前浏览器不支持语音，已切换手动输入'); return; }
+    if (!SR) {
+        if (voiceMode === 'search') openSearchPanel(true);
+        else openKeyboard();
+        toast('当前浏览器不支持语音，已切换手动输入');
+        return;
+    }
     voiceManualStop = false;
-    document.getElementById('voice-text').textContent = '请开始说话…';
+    document.getElementById('voice-text').textContent = voiceMode === 'search' ? '请说出要搜索的内容…' : '请开始说话…';
     document.getElementById('voice-overlay').classList.add('show');
     document.getElementById('input-capsule').classList.add('listening');
     rec = new SR();
@@ -1760,18 +1767,32 @@ function startVoice() {
         for (let i = 0; i < e.results.length; i++) if (e.results[i].isFinal) final += e.results[i][0].transcript;
         if (final.trim()) { got = true; document.getElementById('voice-text').textContent = '识别：' + final.trim(); }
     };
-    rec.onerror = () => { closeVoice(); toast('语音识别失败，可长按胶囊手动输入'); };
+    rec.onerror = () => {
+        closeVoice();
+        if (voiceMode === 'search') openSearchPanel(true);
+        toast('语音识别失败，可长按胶囊手动输入');
+    };
     rec.onend = () => {
         document.getElementById('input-capsule').classList.remove('listening');
         if (voiceManualStop) { voiceManualStop = false; return; }
         document.getElementById('voice-overlay').classList.remove('show');
         const txt = document.getElementById('voice-text').textContent.replace('识别：', '').trim();
-        if (got && txt) addTodo(txt);
+        if (got && txt) {
+            if (voiceMode === 'search') {
+                document.getElementById('search-input').value = txt;
+                openSearchPanel(false);
+                applySearch();
+                toast('已搜索：「' + txt + '」');
+            } else {
+                addTodo(txt);
+            }
+        }
         else toast('未识别到内容，可长按胶囊手动输入');
     };
     try { rec.start(); } catch (e) {
         closeVoice();
-        openKeyboard();
+        if (voiceMode === 'search') openSearchPanel(true);
+        else openKeyboard();
         toast('无法启动语音，已切换手动输入');
     }
 }
@@ -1979,11 +2000,34 @@ function applySearch() {
         starSprites.forEach(sp => { sp.userData.match = false; });
     }
 }
-document.getElementById('search-toggle').addEventListener('click', () => {
-    const panel = document.getElementById('search-panel');
-    const willOpen = panel.classList.contains('hidden');
-    panel.classList.toggle('hidden');
-    liftCapsule('search-toggle', willOpen);      /* 搜索开始工作：右滑一个胶囊位 */
+function openSearchPanel(focusInput) {
+    document.getElementById('search-panel').classList.remove('hidden');
+    liftCapsule('search-toggle', true);          /* 搜索开始工作：右滑一个胶囊位 */
+    if (focusInput) setTimeout(() => document.getElementById('search-input').focus(), 150);
+}
+function closeSearchPanel() {
+    document.getElementById('search-panel').classList.add('hidden');
+    liftCapsule('search-toggle', false);
+}
+/* 搜索胶囊：单击 = 语音搜索（识别后自动填入并弹出面板）；长按 = 直接弹键盘面板 */
+let searchPress = null;
+const searchCapsule = document.getElementById('search-toggle');
+searchCapsule.addEventListener('pointerdown', () => {
+    searchPress = { done: false };
+    searchPress.timer = setTimeout(() => { searchPress.done = true; openSearchPanel(true); }, 480);
+});
+searchCapsule.addEventListener('pointerup', () => {
+    clearTimeout(searchPress && searchPress.timer);
+    if (searchPress && !searchPress.done) {
+        const panel = document.getElementById('search-panel');
+        if (!panel.classList.contains('hidden')) closeSearchPanel();
+        else startVoice('search');
+    }
+    searchPress = null;
+});
+searchCapsule.addEventListener('pointercancel', () => {
+    clearTimeout(searchPress && searchPress.timer);
+    searchPress = null;
 });
 document.getElementById('search-input').addEventListener('input', applySearch);
 document.getElementById('search-date').addEventListener('change', applySearch);
