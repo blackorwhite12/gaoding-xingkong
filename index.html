@@ -529,7 +529,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v13-2026-09-01-guide3';
+const DATA_VERSION = 'v14-2026-09-01-guide4';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -1922,7 +1922,8 @@ const GUIDE_KEY = 'gaoding-xingkong-guide';
 const GUIDE_STEPS = [
     { title: '轻松玩转 ①', text: '欢迎来到待炸星空！上下滑动星空二向箔（圆片），可以压扁或爆炸，变成星空中的一颗星星——这两个动作被称为「炸星」。' },
     { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊，可以语音生成二向箔圆片（待办事项）；长按可以调出输入框。' },
-    { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' }
+    { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' },
+    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），建议语音输入，使用「时间 + 对象 + 动作」格式，例如：8点要去买咖啡，提早十分钟提醒我。' }
 ];
 let guideStep = 0;
 function renderGuide() {
