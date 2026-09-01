@@ -265,6 +265,7 @@ body::after {
 @keyframes vb { 0%, 100% { height: 8px; } 50% { height: 38px; } }
 .v-text { font-size: 13px; color: #d6f0ff; text-align: center; min-height: 20px; letter-spacing: 1px;
     line-height: 1.6; word-break: break-all; margin-bottom: 14px; user-select: text; -webkit-user-select: text; }
+#guide-text { line-height: 1.9; text-align: justify; text-justify: inter-ideograph; text-align-last: center; }
 
 /* ---------- Toast ---------- */
 #toast { position: fixed; left: 50%; bottom: 13vh; transform: translate(-50%, 16px); z-index: 500;
@@ -531,7 +532,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v15-2026-09-01-guide8';
+const DATA_VERSION = 'v16-2026-09-01-guide-polish';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -1236,6 +1237,7 @@ document.addEventListener('pointerup', () => {
 });
 
 document.addEventListener('mousemove', (e) => {
+    if (document.getElementById('guide-overlay').classList.contains('show')) return;   /* 引导弹出时冻结展收 */
     if (burstSelected !== null) { burstTarget = 1; return; }
     if (dragActive) return;
     /* hover 在方块上时冻结展开进度，便于选择；移出方块后恢复滑动控制 */
@@ -1922,14 +1924,14 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 /* ================= DEMO 操作引导（重置后自动弹出） ================= */
 const GUIDE_KEY = 'gaoding-xingkong-guide';
 const GUIDE_STEPS = [
-    { title: '轻松玩转 ①', text: '欢迎来到待炸星空！上下滑动星空二向箔（圆片），可以压扁或爆炸，变成星空中的一颗星星——这两个动作被称为「炸星」。' },
+    { title: '轻松玩转 ①', text: '欢迎来到待炸星空！\n上下滑动星空二向箔（圆片），\n可以把搞定 or 没搞定的事情\n狠狠压扁或者点爆，\n变成星空中的一颗星星，\n这两个动作被称为「炸星」。' },
     { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊，可以语音生成二向箔圆片（待办事项）；长按可以调出输入框。' },
     { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' },
-    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），建议语音输入，使用「时间 + 对象 + 动作」格式，例如：8点要去买咖啡，提早十分钟提醒我。' },
-    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，圆片会散开；点击右边会合拢。' },
-    { title: '轻松玩转 ⑥', text: '连点五下右上角时间，会有炸星汇总；点年份就是年度汇总。' },
-    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」，会跳出本使用说明（随时可看）。' },
-    { title: '轻松玩转 ⑧', text: '连点右下角的「重置」按钮，清空所有数据、炸星归零。' }
+    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），\n建议语音输入，\n使用「时间 + 对象 + 动作」格式，\n例如：8点要去买咖啡，提早十分钟提醒我。' },
+    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，\n圆片会散开；\n点击右边会合拢。' },
+    { title: '轻松玩转 ⑥', text: '连点五下右上角时间，\n会有炸星汇总；\n点年份就是年度汇总。' },
+    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」，\n会跳出本使用说明（随时可看）。' },
+    { title: '轻松玩转 ⑧', text: '连点右下角的「重置」按钮，\n清空所有数据、炸星归零。' }
 ];
 let guideStep = 0;
 function renderGuide() {
