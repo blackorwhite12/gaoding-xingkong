@@ -737,6 +737,7 @@ function slowmo(scale, ms) {
     timeScale = scale;
     setTimeout(() => { timeScale = 1; }, ms);
 }
+const clamp01 = v => Math.max(0, Math.min(1, v));
 
 /* 弧线：数量越少扇面收窄（≥6 张回到原版 ±99°），1 张居中 */
 function arcSpan(N) {
