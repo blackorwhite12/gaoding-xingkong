@@ -222,6 +222,12 @@ body::after {
     background: rgba(0,30,65,0.75); border: 1px solid rgba(0,170,255,0.45); border-radius: 3px;
     outline: none; letter-spacing: 1px; user-select: text; -webkit-user-select: text; }
 #search-panel input:focus { border-color: rgba(0,220,255,0.9); box-shadow: 0 0 12px rgba(0,200,255,0.35); }
+.sp-head { display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; letter-spacing: 2px; color: #aae6ff; }
+#search-close { width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(255,102,102,0.6); color: #ff8a8a; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; transition: all .2s; }
+#search-close:active { background: rgba(255,102,102,0.25); }
 #search-results { max-height: 190px; overflow-y: auto; font-size: 11px; color: #bfe9ff;
     line-height: 1.9; letter-spacing: 1px; }
 .sum-item { padding: 6px 4px; border-bottom: 1px dashed rgba(0,170,255,0.2); }
@@ -423,6 +429,10 @@ body::after {
     <span class="cap-label">⌕ 搜索</span>
 </div>
 <div id="search-panel" class="hidden">
+    <div class="sp-head">
+        <span>检索炸星事宜</span>
+        <span id="search-close" title="关闭">×</span>
+    </div>
     <input id="search-input" type="text" placeholder="关键词检索炸星事宜" autocomplete="off">
     <div class="f-row">
         <input id="search-date" type="date" title="按完成日期筛选">
@@ -2033,6 +2043,7 @@ function closeSearchPanel() {
     document.getElementById('search-panel').classList.add('hidden');
     liftCapsule('search-toggle', false);
 }
+document.getElementById('search-close').addEventListener('click', closeSearchPanel);
 /* 搜索胶囊：单击 = 语音搜索（识别后自动填入并弹出面板）；长按 = 直接弹键盘面板 */
 let searchPress = null;
 const searchCapsule = document.getElementById('search-toggle');
