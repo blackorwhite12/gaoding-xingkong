@@ -1529,8 +1529,8 @@ const starSprites = [];
 function screenToPlane(sx, sy) {
     const ndc = new THREE.Vector2((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
     const v = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(camera);
-    const dir = v.sub(camera.position).normalize();
-    const t = -camera.position.z / Math.max(0.0001, dir.z);
+    const dir = v.sub(camera.position);
+    const t = dir.z !== 0 ? -camera.position.z / dir.z : 0;
     return camera.position.clone().add(dir.multiplyScalar(t));
 }
 function createStarSprite(star) {
@@ -1553,11 +1553,13 @@ function createStarSprite(star) {
     if (star.screenX != null) {
         const p0 = nebulas[ring].group.worldToLocal(screenToPlane(star.screenX, star.screenY).clone());
         sp.position.copy(p0);
-        sp.scale.set(1.05, 1.05, 1);
-        const tl = gsap.timeline({ delay: star.delay || 0 });
-        tl.to(sp.scale, { x: 0.5, y: 0.5, duration: 0.3, ease: 'back.out(2.2)' })
-          .to(sp.position, { x: tx, y: ty, z: 0, duration: 1.5, ease: 'power2.inOut' }, 0.15)
-          .to(sp.scale, { x: 0.18, y: 0.18, duration: 1.25, ease: 'power2.inOut' }, 0.15);
+        sp.scale.set(1.5, 1.5, 1);
+        sp.userData.born = {
+            t: performance.now(),
+            delay: star.delay || 0,
+            from: p0.clone(),
+            to: new THREE.Vector3(tx, ty, 0)
+        };
     }
     return sp;
 }
@@ -2113,6 +2115,27 @@ function animate() {
     /* 搜索命中：星点放大呼吸闪烁 */
     const tNow = performance.now() / 1000;
     starSprites.forEach(sp => {
+        const b = sp.userData.born;
+        if (b) {
+            /* 归星动画：诞生点放大亮相 → 飞向轨道并缩小（约 2.1 秒，足够看清） */
+            const el = performance.now() - b.t - b.delay;
+            if (el >= 0) {
+                const DUR = 2100;
+                const p = Math.min(1, el / DUR);
+                const hold = Math.min(1, p / 0.16);
+                const fly = Math.min(1, Math.max(0, (p - 0.16) / 0.84));
+                const ease = 1 - Math.pow(1 - fly, 3);
+                sp.scale.set(1.5 * (1 - 0.88 * ease), 1.5 * (1 - 0.88 * ease), 1);
+                sp.position.lerpVectors(b.from, b.to, ease);
+                sp.material.opacity = 1;
+                if (p >= 1) {
+                    sp.userData.born = null;
+                    sp.scale.set(0.18, 0.18, 1);
+                    sp.position.copy(b.to);
+                }
+            }
+            return;
+        }
         if (sp.userData.match) {
             const s = 0.18 * (1 + 0.35 * Math.sin(tNow * 7));
             sp.scale.set(s, s, 1);
