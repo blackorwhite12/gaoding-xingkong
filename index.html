@@ -76,7 +76,9 @@ body::after {
 .hud-corner.br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
 .hud-top { position: absolute; top: 18px; left: 0; width: 100%; display: flex;
     justify-content: space-between; padding: 0 30px; font-size: 12px; letter-spacing: 2px; color: #66d9ff; }
-.hud-top .sys-name { color: #fff; font-weight: 600; text-shadow: 0 0 8px rgba(0,170,255,0.6); }
+.hud-top .sys-name { color: #fff; font-weight: 600; text-shadow: 0 0 8px rgba(0,170,255,0.6);
+    cursor: pointer; pointer-events: auto; transition: text-shadow .2s; }
+.hud-top .sys-name:hover { text-shadow: 0 0 16px rgba(0,220,255,0.95); }
 .hud-bottom { position: absolute; bottom: 24px; left: 0; width: 100%; text-align: center;
     color: rgba(0,170,255,0.75); font-size: 12px; letter-spacing: 3px; }
 .hud-data { position: absolute; bottom: 24px; right: 30px; font-size: 10px; color: rgba(102,217,255,0.5);
@@ -238,14 +240,14 @@ body::after {
 .d-part { cursor: pointer; transition: text-shadow .2s; }
 .d-part:hover { text-shadow: 0 0 14px rgba(0,220,255,0.9); }
 /* ---------- DEMO 专用重置按钮（正式版移除） ---------- */
-#reset-btn { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 220;
+#reset-btn { position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 220;
     width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
     border: 1px solid rgba(255,120,120,0.7); color: #ffb0b0; font-size: 12px; letter-spacing: 1px;
     background: radial-gradient(circle at 35% 30%, rgba(255,120,120,0.22), rgba(70,20,30,0.75) 68%);
     box-shadow: 0 0 16px rgba(255,90,90,0.35), inset 0 0 14px rgba(255,90,90,0.18);
     display: flex; align-items: center; justify-content: center; text-align: center;
     transition: transform .18s, box-shadow .25s; touch-action: none; user-select: none; }
-#reset-btn:active { transform: translateY(-50%) scale(0.92); box-shadow: 0 0 28px rgba(255,90,90,0.7); }
+#reset-btn:active { transform: scale(0.92); box-shadow: 0 0 28px rgba(255,90,90,0.7); }
 #reset-btn.armed { border-color: #ff6666; color: #ffd7d7; background: rgba(255,80,80,0.35);
     box-shadow: 0 0 30px rgba(255,70,70,0.8); }
 
@@ -529,7 +531,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v14-2026-09-01-guide4';
+const DATA_VERSION = 'v15-2026-09-01-guide8';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -1923,7 +1925,11 @@ const GUIDE_STEPS = [
     { title: '轻松玩转 ①', text: '欢迎来到待炸星空！上下滑动星空二向箔（圆片），可以压扁或爆炸，变成星空中的一颗星星——这两个动作被称为「炸星」。' },
     { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊，可以语音生成二向箔圆片（待办事项）；长按可以调出输入框。' },
     { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' },
-    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），建议语音输入，使用「时间 + 对象 + 动作」格式，例如：8点要去买咖啡，提早十分钟提醒我。' }
+    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），建议语音输入，使用「时间 + 对象 + 动作」格式，例如：8点要去买咖啡，提早十分钟提醒我。' },
+    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，圆片会散开；点击右边会合拢。' },
+    { title: '轻松玩转 ⑥', text: '连点五下右上角时间，会有炸星汇总；点年份就是年度汇总。' },
+    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」，会跳出本使用说明（随时可看）。' },
+    { title: '轻松玩转 ⑧', text: '连点右下角的「重置」按钮，清空所有数据、炸星归零。' }
 ];
 let guideStep = 0;
 function renderGuide() {
@@ -2025,6 +2031,16 @@ document.getElementById('hud-date').addEventListener('click', e => {
 });
 document.getElementById('summary-close').addEventListener('click', () => document.getElementById('summary-overlay').classList.remove('show'));
 document.getElementById('summary-ok').addEventListener('click', () => document.getElementById('summary-overlay').classList.remove('show'));
+
+/* 连点左上角「待炸星空」5 下 → 重开轻松玩转引导 */
+const nameClick = { count: 0, t: 0 };
+document.querySelector('.sys-name').addEventListener('click', () => {
+    const now = Date.now();
+    if (now - nameClick.t > 2500) nameClick.count = 0;
+    nameClick.t = now;
+    nameClick.count++;
+    if (nameClick.count >= 5) { nameClick.count = 0; showGuide(); }
+});
 
 /* 搜索：关键词 + 日期 → 汇总 + 星点高亮闪烁 */
 function applySearch() {
