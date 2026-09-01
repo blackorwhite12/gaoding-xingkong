@@ -532,7 +532,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v16-2026-09-01-guide-polish';
+const DATA_VERSION = 'v17-2026-09-01-guide5';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -1928,7 +1928,7 @@ const GUIDE_STEPS = [
     { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊，可以语音生成二向箔圆片（待办事项）；长按可以调出输入框。' },
     { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' },
     { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），\n建议语音输入，\n使用「时间 + 对象 + 动作」格式，\n例如：8点要去买咖啡，提早十分钟提醒我。' },
-    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，\n圆片会散开；\n点击右边会合拢。' },
+    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，\n圆片会散开；点击右边会合拢。\n按住星空拖动，可以旋转调整星空背景，\n选个自己喜欢的角度。' },
     { title: '轻松玩转 ⑥', text: '连点五下右上角时间，\n会有炸星汇总；\n点年份就是年度汇总。' },
     { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」，\n会跳出本使用说明（随时可看）。' },
     { title: '轻松玩转 ⑧', text: '连点右下角的「重置」按钮，\n清空所有数据、炸星归零。' }
