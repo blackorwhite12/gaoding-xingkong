@@ -1802,14 +1802,13 @@ let voiceManualStop = false;
 let voiceMode = 'todo';          /* 'todo' 建待办 / 'search' 语音搜索 */
 function startVoice(mode) {
     voiceMode = mode || 'todo';
-    liftCapsule('input-capsule', true);
+    liftCapsule(voiceMode === 'search' ? 'search-toggle' : 'input-capsule', true);
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        if (voiceMode === 'search') openSearchPanel(true);
-        else openKeyboard();
-        toast('当前浏览器不支持语音，已切换手动输入');
+        voiceFallback('当前浏览器不支持语音识别（iPhone 可点键盘上的麦克风听写），已切换手动输入');
         return;
     }
+    if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
     voiceManualStop = false;
     document.getElementById('voice-text').textContent = voiceMode === 'search' ? '请说出要搜索的内容…' : '请开始说话…';
     document.getElementById('voice-overlay').classList.add('show');
@@ -1824,10 +1823,12 @@ function startVoice(mode) {
         for (let i = 0; i < e.results.length; i++) if (e.results[i].isFinal) final += e.results[i][0].transcript;
         if (final.trim()) { got = true; document.getElementById('voice-text').textContent = '识别：' + final.trim(); }
     };
-    rec.onerror = () => {
-        closeVoice();
-        if (voiceMode === 'search') openSearchPanel(true);
-        toast('语音识别失败，可长按胶囊手动输入');
+    rec.onerror = ev => {
+        const name = ev && ev.error;
+        let msg = '语音识别失败，已切换手动输入';
+        if (name === 'not-allowed' || name === 'service-not-allowed') msg = '麦克风权限被拒绝，已切换手动输入';
+        else if (name === 'no-speech') msg = '没有听清，已切换手动输入';
+        voiceFallback(msg);
     };
     rec.onend = () => {
         document.getElementById('input-capsule').classList.remove('listening');
@@ -1844,17 +1845,30 @@ function startVoice(mode) {
                 addTodo(txt);
             }
         }
-        else toast('未识别到内容，可长按胶囊手动输入');
+        else voiceFallback('未识别到内容，已切换手动输入');
     };
-    try { rec.start(); } catch (e) {
-        closeVoice();
-        if (voiceMode === 'search') openSearchPanel(true);
-        else openKeyboard();
-        toast('无法启动语音，已切换手动输入');
+    const start = () => {
+        try { rec.start(); }
+        catch (e) { voiceFallback('无法启动语音（请允许麦克风权限），已切换手动输入'); }
+    };
+    /* 先申请麦克风权限再启动识别（部分浏览器首次点击必须） */
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => { stream.getTracks().forEach(t => t.stop()); start(); })
+            .catch(() => voiceFallback('麦克风权限被拒绝，已切换手动输入'));
+    } else {
+        start();
     }
+}
+function voiceFallback(msg) {
+    closeVoice();
+    if (voiceMode === 'search') openSearchPanel(true);
+    else openKeyboard();
+    toast(msg);
 }
 function closeVoice() {
     liftCapsule('input-capsule', false);
+    liftCapsule('search-toggle', false);
     voiceManualStop = true;
     if (rec) { try { rec.stop(); } catch (e) {} rec = null; }
     document.getElementById('voice-overlay').classList.remove('show');
