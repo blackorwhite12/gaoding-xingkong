@@ -745,11 +745,7 @@ let lastDragMoved = false;
 let currentSlotPx = 86;
 let bootEntered = false;         /* 是否已进入主界面（DEMO 红温提示用） */
 let appVisible = false;          /* 开屏是否完全消失（提示只在完全进入后弹） */
-let flipFloat = 0;               /* 合拢翻页：堆叠显示偏移（float，逐帧缓动） */
-let flipTarget = 0;
-let lastFlip = 0;                /* 最近翻页时间（闲置后红温恢复顶置） */
-let flipDrag = 0;                /* 翻页跟手滑动（px，松手缓动归零） */
-let pageTurn = 0;                /* 顶部圆片翻页角度（deg） */
+let lastRotate = 0;              /* 最近一次循环转动时间（闲置后恢复红温顶置） */
 let timeScale = 1;               /* 爆炸慢动作：0~1 时间缩放 */
 function slowmo(scale, ms) {
     timeScale = scale;
@@ -1128,7 +1124,8 @@ function dragStart(x, y, el) {
         sx: x, sy: y, dx: 0, dy: 0, moved: false,
         t0: performance.now(), mode: null, el,
         baseCY: rect.y + rect.height / 2,
-        startBurst: burstCurrent
+        startBurst: burstCurrent,
+        fanOffsetStart: fanOffset          /* 循环转动从当前角度继续 */
     };
 }
 function dragMove(x, y) {
@@ -1145,13 +1142,8 @@ function dragMove(x, y) {
         }
     }
     if (pointerDrag.mode === 'h') {
-        if (pointerDrag.startBurst < 0.5) {
-            flipDrag = dx;                                 /* 合拢：整摞 1:1 跟手滑动 */
-            pageTurn = Math.max(-40, Math.min(40, dx * 0.45));   /* 顶部圆片翻页角 */
-            lastFlip = Date.now();
-        } else {
-            fanOffset = dx / currentSlotPx;                /* 展开：整环自由旋转跟手 */
-        }
+        fanOffset = pointerDrag.fanOffsetStart + (pointerDrag.startBurst < 0.5 ? dx / 70 : dx / currentSlotPx);   /* 增量循环转动 */
+        lastRotate = Date.now();
         return;
     }
     if (pointerDrag.mode === 'v' && vDrag && pointerDrag.el === vDrag.el) {
@@ -1216,20 +1208,9 @@ function endDrag() {
         return;
     }
     const vx = d.dx / Math.max(1, (performance.now() - d.t0) / 1000);
-    if (d.startBurst < 0.5) {
-        /* 合拢：翻页（切换堆叠最上面那张），手势优先于红温顶置 */
-        let n2 = Math.round(d.dx / 70);
-        if (n2 === 0 && Math.abs(d.dx) > 30) n2 = d.dx > 0 ? 1 : -1;
-        if (Math.abs(vx) > 900) n2 += Math.sign(vx) * Math.min(3, Math.floor((Math.abs(vx) - 900) / 500));
-        n2 = Math.max(-6, Math.min(6, n2));
-        flipTarget += n2;
-        flipFloat = flipTarget;                            /* 换页后缓动到位 */
-        flipDrag = d.dx - n2 * 70;                         /* 继续滑到新页再归位 */
-        pageTurn = Math.max(-40, Math.min(40, (d.dx - n2 * 70) * 0.45));
-        lastFlip = Date.now();
-    } else {
-        fanOffset = d.dx / currentSlotPx;                  /* 展开：自由旋转，转到哪停哪 */
-    }
+    fanOffset = d.fanOffsetStart + (d.startBurst < 0.5 ? d.dx / 70 : d.dx / currentSlotPx);   /* 增量：转到哪停哪 */
+    if (Math.abs(vx) > 900) fanOffset += Math.sign(vx) * Math.min(3, Math.floor((Math.abs(vx) - 900) / 500));   /* 快甩连转 */
+    lastRotate = Date.now();
 }
 window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
@@ -1275,13 +1256,8 @@ function burstLayout() {
     if (!vDrag) checkUrgency();                /* 预警项自动顶置（拖拽中不打断） */
     burstCurrent += (burstTarget - burstCurrent) * 0.12 * timeScale;
     /* 合拢翻页：逐帧缓动；闲置 8 秒后红温恢复顶置 */
-    flipFloat += (flipTarget - flipFloat) * 0.14 * timeScale;
-    if (Math.abs(flipTarget - flipFloat) < 0.01) flipFloat = flipTarget;
-    if (flipTarget !== 0 && Date.now() - lastFlip > 8000) flipTarget = 0;
-    flipDrag += (0 - flipDrag) * 0.16 * timeScale;
-    pageTurn += (0 - pageTurn) * 0.14 * timeScale;
-    if (Math.abs(flipDrag) < 0.5) flipDrag = 0;
-    if (Math.abs(pageTurn) < 0.5) pageTurn = 0;
+    /* 闲置 8 秒后循环转动归零 → 红温顶置恢复 */
+    if (fanOffset !== 0 && Date.now() - lastRotate > 8000) fanOffset = 0;
     rbCards.forEach((c, i) => {
         const N = Math.max(1, orderRing.length);
         const t = Math.max(0, Math.min(1, burstCurrent));
@@ -1305,25 +1281,16 @@ function burstLayout() {
         /* 收拢锚定：合拢时按截止时间叠放（最近在最上面），展开时按环位置排 */
         const basePosV = c._basePos != null ? c._basePos : i;
         const rank0 = c._stackRank != null ? c._stackRank : 0;
-        const dispRank = ((rank0 + flipFloat) % N + N) % N;    /* 翻页：堆叠显示偏移 */
+        const dispRank = ((rank0 + fanOffset) % N + N) % N;    /* 循环转动：堆叠跟随旋转 */
         const stackBlend = dispRank + (basePosV - dispRank) * eased;
         const collapsedMode = eased < 0.5;
         const orderVal = collapsedMode ? dispRank : basePosV;
         /* 右手炸星：合拢时最近的那张在右侧最上面，后面的往左上方收 */
         const midN = (N - 1) / 2;
-        const isTopCard = Math.min(dispRank, N - dispRank) < 0.4;   /* 当前最上面那张 */
         const sx = RB_CX + (midN - stackBlend) * 5.5;
         const sy = RB_CENTER_Y + (midN - stackBlend) * 1.4;
         let x = sx + (ax - sx) * eased;
         let y = sy + (ay - sy) * eased;
-        let fadeMul = 1;
-        if (eased < 0.5) {
-            x += flipDrag;                                 /* 合拢：整摞跟手滑动 */
-            if (isTopCard && Math.abs(flipDrag) > 0.5) {
-                x += flipDrag * 0.6;                       /* 当前卡片跟手滑出 */
-                fadeMul = 1 - 0.4 * Math.min(1, Math.abs(flipDrag) / 70);
-            }
-        }
         let z = collapsedMode ? (N - orderVal) * 2.5 : orderVal * 2.5;
         /* 收拢时缩小沉入星云深处，展开时放大浮出 → 钻出感 */
         let scale = 0.82 + 0.18 * eased;
@@ -1417,11 +1384,10 @@ function burstLayout() {
                 ? '0 0 80px rgba(255,150,60,0.95), 0 0 180px rgba(255,120,50,0.5), inset 0 0 44px rgba(255,140,60,0.4), 0 18px 40px rgba(0,0,0,0.4)'
                 : '0 0 80px rgba(120,235,255,0.95), 0 0 180px rgba(0,170,255,0.5), inset 0 0 44px rgba(0,170,255,0.32), 0 18px 40px rgba(0,0,0,0.4)';
         } else {
-            const turn = (collapsedMode && isTopCard && Math.abs(pageTurn) > 0.5) ? ` rotateY(${pageTurn}deg)` : '';
-            c.style.transform = `translate3d(${x - RB_HALF}px, ${y - RB_HALF}px, ${z}px) scale(${scale})${turn}`;
-            c.style.opacity = baseOp * fade * fadeMul;
+            c.style.transform = `translate3d(${x - RB_HALF}px, ${y - RB_HALF}px, ${z}px) scale(${scale})`;
+            c.style.opacity = baseOp * fade;
             /* 层级：合拢时截止最近的排最上面；展开时最右边的排最上面 */
-            c.style.zIndex = burstSelected === c ? 1000 : (isHover ? 950 : (collapsedMode ? N - orderVal : orderVal + 1));
+            c.style.zIndex = burstSelected === c ? 1000 : (isHover ? 950 : (collapsedMode ? Math.round(N - orderVal) : orderVal + 1));
             c.style.boxShadow = burstSelected === c
                 ? '0 0 80px rgba(120,235,255,0.95), 0 0 180px rgba(0,170,255,0.5), inset 0 0 44px rgba(0,170,255,0.32)'
                 : (isHover
