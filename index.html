@@ -113,6 +113,9 @@ body::after {
 }
 .rb-card .rb-num { font-size: 30px; font-weight: 700; color: #fff;
     text-shadow: 0 0 10px rgba(0,170,255,0.8); margin-bottom: 5px; }
+.rb-card .rb-name { font-size: 12px; color: #aae6ff; letter-spacing: 1px; line-height: 1.5;
+    max-width: 170px; overflow: hidden; }
+.rb-card .rb-time { font-size: 10px; color: rgba(170,230,255,0.8); letter-spacing: 1px; margin-top: 6px; }
 .rb-card.empty { border-style: solid; border-color: rgba(0,170,255,0.22);
     background: radial-gradient(circle at 50% 55%, rgba(0,70,130,0.20), rgba(0,18,42,0.62) 72%); }
 .rb-empty { font-size: 24px; color: rgba(120,190,230,0.25); letter-spacing: 1px; }
@@ -808,7 +811,9 @@ function createCard(t) {
     c._fade = 1;
     c.innerHTML = `<div class="rb-urgent"></div>
         <div class="rb-prewarn"></div>
-        <span class="rb-num">${String(t.seq).padStart(2, '0')}</span>`;   /* 正式版：圆片只留序号，文字进详情 */
+        <span class="rb-num">${String(t.seq).padStart(2, '0')}</span>
+        <span class="rb-name">${escapeHtml(t.text)}</span>
+        <span class="rb-time">${t.start} → ${t.deadline}</span>`;
     c.addEventListener('mouseenter', () => { if (!burstSelected) { sfx.hover(); burstHoverEl = c; } });
     c.addEventListener('mouseleave', () => { if (burstHoverEl === c) burstHoverEl = null; });
     c.addEventListener('click', () => {
@@ -1609,6 +1614,7 @@ function createStarSprite(star) {
 }
 completedStars.forEach(createStarSprite);
 
+seedSeq();                    /* 按今天已生成序号初始化每日计数器，避免重复编号 */
 renderDate();
 setInterval(renderDate, 30000);
 
@@ -1748,10 +1754,38 @@ function parseTimeIntent(raw) {
     }
     return out;
 }
+/* 序号按"自然日"维护：同一天内自动续号（炸掉的也接着算），次日零点从 01 重新开始 */
+const SEQ_KEY = 'gaoding-xingkong-seq';
+let seqStore = null;
+function loadSeqStore() {
+    if (seqStore) return seqStore;
+    seqStore = { day: '', n: 0 };
+    try { const s = JSON.parse(localStorage.getItem(SEQ_KEY)); if (s && s.day) seqStore = s; } catch (e) {}
+    return seqStore;
+}
+function saveSeqStore() {
+    try { localStorage.setItem(SEQ_KEY, JSON.stringify(seqStore)); } catch (e) {}
+}
+function seedSeq() {
+    const today = todayKey();
+    const s = loadSeqStore();
+    if (s.day === today) return;
+    const isDemo = t => String(t.id).startsWith('demo');
+    const inToday = t => dateStr(new Date(t.createdAt || 0)) === today;
+    /* 正式序号从今天真实待办最大号接着编；若今天还有未炸示例，则从示例最大号之后编，避免撞号 */
+    const realMax = todos.filter(t => !isDemo(t) && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
+    const demoActiveMax = todos.filter(t => isDemo(t) && !t.done && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
+    s.day = today;
+    s.n = Math.max(realMax, demoActiveMax);
+    saveSeqStore();
+}
 function nextSeq() {
-    /* 用户可见编号：只算用户自己新增的待办（示例数据幕后统计，不占编号） */
-    const userTodos = todos.filter(t => !String(t.id).startsWith('demo'));
-    return userTodos.reduce((m, t) => Math.max(m, t.seq || 0), 0) + 1;
+    const today = todayKey();
+    const s = loadSeqStore();
+    if (s.day !== today) { s.day = today; s.n = 0; }
+    s.n += 1;
+    saveSeqStore();
+    return s.n;
 }
 function defaultDeadline() {
     const d = new Date(Date.now() + 2 * 3600000);
