@@ -889,7 +889,7 @@ function scheduleReminders() {
 }
 /* 每秒检查：进入预警窗口的待办自动顶置 */
 function checkUrgency() {
-    if (vDrag) return;
+    if (vDrag || dragActive || bgGesture) return;   /* 正被拖拽/手势/背景交互时暂停自动顶置，操作优先 */
     const now = Date.now();
     const active = activeTodos();
     const urgent = active.filter(t => isUrgent(t, now));
@@ -1283,7 +1283,7 @@ function resetBurst() {
 }
 
 function burstLayout() {
-    if (!vDrag) checkUrgency();                /* 预警项自动顶置（拖拽中不打断） */
+    if (!vDrag && !dragActive && !bgGesture) checkUrgency();   /* 预警项自动顶置；用户操作时暂停，操作优先 */
     burstCurrent += (burstTarget - burstCurrent) * 0.12 * timeScale;
     /* 合拢翻页：逐帧缓动；闲置 8 秒后红温恢复顶置 */
     /* 闲置 8 秒后循环转动归零 → 红温顶置恢复 */
