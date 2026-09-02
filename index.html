@@ -532,7 +532,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v19-2026-09-01-reset5';
+const DATA_VERSION = 'v20-2026-09-01-bg-gesture';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -1215,20 +1215,34 @@ function endDrag() {
 window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
 
-/* 手机散开/合拢：按住屏幕左右边缘（不碰圆片）左右滑动 */
-let edgeSpread = false;
-document.addEventListener('pointerdown', e => {
-    if (e.target && e.target.tagName === 'CANVAS' && (e.clientX < 70 || e.clientX > window.innerWidth - 70)) {
-        edgeSpread = true;
-        controls.enabled = false;
+/* 手机散开/合拢：按住星空背景横向拖动（左散右合）；纵向=旋转星云，双指=缩放 */
+let bgGesture = null;
+const sceneContainer = document.getElementById('scene-container');
+sceneContainer.addEventListener('pointerdown', e => {
+    if (e.target.tagName !== 'CANVAS') return;
+    if (bgGesture) { bgGesture = null; controls.enabled = true; return; }   /* 第二根手指交给 OrbitControls（缩放） */
+    bgGesture = { sx: e.clientX, sy: e.clientY, id: e.pointerId, mode: null };
+});
+sceneContainer.addEventListener('pointermove', e => {
+    if (!bgGesture || e.pointerId !== bgGesture.id) return;
+    const dx = e.clientX - bgGesture.sx;
+    const dy = e.clientY - bgGesture.sy;
+    if (!bgGesture.mode && Math.hypot(dx, dy) > 10) {
+        bgGesture.mode = Math.abs(dx) > Math.abs(dy) ? 'spread' : 'rotate';
+        if (bgGesture.mode === 'spread') controls.enabled = false;
+    }
+    if (bgGesture.mode === 'spread') {
         burstTarget = clamp01(1 - (e.clientX / window.innerWidth) * 1.8);
     }
 });
-document.addEventListener('pointermove', e => {
-    if (edgeSpread) burstTarget = clamp01(1 - (e.clientX / window.innerWidth) * 1.8);
+sceneContainer.addEventListener('pointerup', e => {
+    if (bgGesture && e.pointerId === bgGesture.id) { bgGesture = null; controls.enabled = true; }
 });
-document.addEventListener('pointerup', () => {
-    if (edgeSpread) { edgeSpread = false; controls.enabled = true; }
+sceneContainer.addEventListener('pointercancel', () => { bgGesture = null; controls.enabled = true; });
+/* 双击星空背景：全散开 / 合拢 切换（手机稳定散开的备用方式） */
+sceneContainer.addEventListener('dblclick', e => {
+    if (e.target.tagName !== 'CANVAS') return;
+    burstTarget = burstTarget < 0.5 ? 1 : 0;
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -1918,7 +1932,7 @@ const GUIDE_STEPS = [
     { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊：\n语音生成二向箔圆片（待办事项）；\n长按：调出输入框。' },
     { title: '轻松玩转 ③', text: '点击搜索胶囊：\n语音生成搜索内容；\n长按：调出输入框。' },
     { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片）：\n建议语音输入，\n使用「时间 + 对象 + 动作」格式；\n例如：8点要去买咖啡，提早十分钟提醒我。' },
-    { title: '轻松玩转 ⑤', text: '点击星空背景左边：圆片散开；\n点击右边：圆片合拢；\n按住星空拖动：旋转调整背景角度，\n选个自己喜欢的角度。' },
+    { title: '轻松玩转 ⑤', text: '点击星空背景左边：圆片散开；\n点击右边：合拢；\n双击背景：全开 / 合拢；\n按住背景横向拖动：左散右合；\n按住背景纵向拖动：旋转角度，选个喜欢的角度。' },
     { title: '轻松玩转 ⑥', text: '连点五下右上角时间：\n弹出炸星汇总；\n点年份：年度汇总。' },
     { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」：\n跳出本使用说明（随时可看）。' },
     { title: '轻松玩转 ⑧', text: '点击右下角「重置」按钮，\n连点五下确认后：\n清空所有数据、炸星归零。\n谨慎操作。' }
