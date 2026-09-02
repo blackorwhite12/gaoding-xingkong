@@ -136,9 +136,12 @@ body::after {
 #zone-bottom { bottom: 0; background: linear-gradient(to top, rgba(255,120,60,0.16), transparent); }
 .zone-band.show { opacity: 1; }
 #zone-hint { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    z-index: 160; font-size: 16px; letter-spacing: 5px; color: #aeeaff; pointer-events: none;
-    opacity: 0; transition: opacity .2s;
+    z-index: 160; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    letter-spacing: 5px; color: #aeeaff; pointer-events: none;
+    opacity: 0; transition: opacity .2s; text-align: center;
     text-shadow: 0 0 14px rgba(0,170,255,0.9), 0 0 40px rgba(0,170,255,0.5); }
+#zh-action { font-size: 15px; }
+#zh-pct { font-size: 20px; font-weight: 700; line-height: 1.2; transition: font-size .12s ease-out; }
 #zone-hint.show { opacity: 1; }
 #zone-hint.hot { color: #ffb26e; text-shadow: 0 0 14px rgba(255,120,60,0.9), 0 0 40px rgba(255,120,60,0.5); }
 /* ---------- 炸星特效：闪光 / 冲击波 / 碎片 / 屏幕震动 ---------- */
@@ -395,7 +398,10 @@ body::after {
 <!-- 上下拖拽判定区 -->
 <div id="zone-top" class="zone-band"></div>
 <div id="zone-bottom" class="zone-band"></div>
-<div id="zone-hint"></div>
+<div id="zone-hint">
+    <span id="zh-action"></span>
+    <span id="zh-pct"></span>
+</div>
 
 <!-- 详情 -->
 <div id="detail-overlay">
@@ -1158,7 +1164,6 @@ function dragMove(x, y) {
         const hint = document.getElementById('zone-hint');
         hint.classList.toggle('show', !!vDrag.zone);
         hint.classList.toggle('hot', vDrag.zone === 'bottom');
-        hint.textContent = vDrag.zone === 'top' ? '✦ 收为星点' : (vDrag.zone === 'bottom' ? '✧ 撕碎释放' : '');
     }
 }
 /* 指针事件（现代浏览器） */
@@ -1328,8 +1333,11 @@ function burstLayout() {
                 vDrag.charge = Math.min(1, (performance.now() - vDrag.zoneStart) / 1400);
                 const hint = document.getElementById('zone-hint');
                 if (hint.classList.contains('show')) {
-                    hint.textContent = (vDrag.zone === 'top' ? '✦ 收为星点' : '✧ 撕碎释放') +
-                        ' · 蓄力 ' + Math.round(vDrag.charge * 100) + '%';
+                    document.getElementById('zh-action').textContent =
+                        vDrag.zone === 'top' ? '✦ 收为星点' : '✧ 撕碎释放';
+                    const pEl = document.getElementById('zh-pct');
+                    pEl.textContent = Math.round(vDrag.charge * 100) + '%';
+                    pEl.style.fontSize = (18 + 42 * vDrag.charge) + 'px';   /* 数字越大字号越大 */
                 }
             }
             if (vDrag.spring) {
