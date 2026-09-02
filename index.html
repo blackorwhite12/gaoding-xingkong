@@ -1614,7 +1614,6 @@ function createStarSprite(star) {
 }
 completedStars.forEach(createStarSprite);
 
-seedSeq();                    /* 按今天已生成序号初始化每日计数器，避免重复编号 */
 renderDate();
 setInterval(renderDate, 30000);
 
@@ -1787,6 +1786,7 @@ function nextSeq() {
     saveSeqStore();
     return s.n;
 }
+seedSeq();                    /* 在 seqStore/SEQ_KEY 声明之后再初始化每日计数器（避免暂时性死区） */
 function defaultDeadline() {
     const d = new Date(Date.now() + 2 * 3600000);
     if (d.getDate() !== new Date().getDate()) d.setHours(23, 59, 0, 0);
