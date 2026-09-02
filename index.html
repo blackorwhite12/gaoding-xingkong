@@ -113,9 +113,6 @@ body::after {
 }
 .rb-card .rb-num { font-size: 30px; font-weight: 700; color: #fff;
     text-shadow: 0 0 10px rgba(0,170,255,0.8); margin-bottom: 5px; }
-.rb-card .rb-name { font-size: 12px; color: #aae6ff; letter-spacing: 1px; line-height: 1.5;
-    max-width: 170px; overflow: hidden; }
-.rb-card .rb-time { font-size: 10px; color: rgba(170,230,255,0.8); letter-spacing: 1px; margin-top: 6px; }
 .rb-card.empty { border-style: solid; border-color: rgba(0,170,255,0.22);
     background: radial-gradient(circle at 50% 55%, rgba(0,70,130,0.20), rgba(0,18,42,0.62) 72%); }
 .rb-empty { font-size: 24px; color: rgba(120,190,230,0.25); letter-spacing: 1px; }
@@ -645,6 +642,12 @@ function startDemoTimeline() {
 const STAR_KEY = 'gaoding-xingkong-stars';
 let completedStars = [];
 try { completedStars = JSON.parse(localStorage.getItem(STAR_KEY)) || []; } catch (e) {}
+/* 正式版：旧版「示例」星点迁移为演示星，不计入正式总数 */
+let demoStarMigrated = false;
+completedStars.forEach(s => {
+    if (s.demo == null && String(s.text || '').indexOf('示例') === 0) { s.demo = true; demoStarMigrated = true; }
+});
+if (demoStarMigrated) saveStars();
 function saveStars() {
     try { localStorage.setItem(STAR_KEY, JSON.stringify(completedStars)); } catch (e) {}
 }
@@ -667,11 +670,12 @@ function addCompletedStar(info) {
 function renderDate() {
     const d = new Date();
     const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+    const realCount = completedStars.filter(s => !s.demo).length;   /* 示例星不计入正式总数 */
     document.getElementById('hud-date').innerHTML =
         `<span class="d-part" data-p="y">${d.getFullYear()}年</span>` +
         `<span class="d-part" data-p="m">${String(d.getMonth()+1).padStart(2,'0')}月</span>` +
         `<span class="d-part" data-p="d">${String(d.getDate()).padStart(2,'0')}日</span>` +
-        `<small>${week} · 炸星总数 ${completedStars.length} · 永久留存</small>`;
+        `<small>${week} · 炸星总数 ${realCount} · 永久留存</small>`;
 }
 
 /* ================= 音效（Web Audio 合成） ================= */
@@ -804,9 +808,7 @@ function createCard(t) {
     c._fade = 1;
     c.innerHTML = `<div class="rb-urgent"></div>
         <div class="rb-prewarn"></div>
-        <span class="rb-num">${String(t.seq).padStart(2, '0')}</span>
-        <span class="rb-name">${escapeHtml(t.text)}</span>
-        <span class="rb-time">${t.start} → ${t.deadline}</span>`;
+        <span class="rb-num">${String(t.seq).padStart(2, '0')}</span>`;   /* 正式版：圆片只留序号，文字进详情 */
     c.addEventListener('mouseenter', () => { if (!burstSelected) { sfx.hover(); burstHoverEl = c; } });
     c.addEventListener('mouseleave', () => { if (burstHoverEl === c) burstHoverEl = null; });
     c.addEventListener('click', () => {
@@ -1052,6 +1054,7 @@ function completeTodo(todo, mode, px, py) {
     todo.done = true;
     saveTodos();
     const doneAt = new Date();
+    const isDemo = String(todo.id).startsWith('demo');   /* 示例星：保留在星空中但不计入正式总数 */
     const ring = (doneAt.getDay() + 6) % 7;                  /* 周一=0 … 周日=6 → 对应星云层 */
     const hue = Math.round(((tsOf(todo.deadline, todo.deadlineDate) % 86400000) / 86400000) * 360);
     addCompletedStar({
@@ -1063,6 +1066,7 @@ function completeTodo(todo, mode, px, py) {
         deadline: todo.deadline,
         seq: todo.seq,
         overdue: tsOf(todo.deadline, todo.deadlineDate) < doneAt.getTime(),
+        demo: isDemo,
         globalNo: completedStars.length + 1,
         screenX: px != null ? px : null,
         screenY: py != null ? py : null,
@@ -1070,8 +1074,13 @@ function completeTodo(todo, mode, px, py) {
     });
     refreshCards();
     scheduleReminders();
-    if (activeTodos().length === 0) {
-        toast('🎉 全部炸完！待炸为 0，星空点亮 ' + completedStars.length + ' 颗星');
+    const remain = activeTodos();
+    const realStars = completedStars.filter(s => !s.demo).length;
+    if (isDemo) {
+        if (remain.length === 0) toast('🎉 7 个示例全部炸完！正式炸星旅程开始');
+        else toast('✦ 示例已炸（不计入正式总数）');
+    } else if (remain.length === 0) {
+        toast('🎉 全部炸完！待炸为 0，星空点亮 ' + realStars + ' 颗星');
     }
 }
 
@@ -1805,7 +1814,9 @@ function startVoice(mode) {
     liftCapsule(voiceMode === 'search' ? 'search-toggle' : 'input-capsule', true);
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        voiceFallback('当前浏览器不支持语音识别（iPhone 可点键盘上的麦克风听写），已切换手动输入');
+        voiceFallback(voiceMode === 'search'
+            ? '当前浏览器不支持语音搜索（微信内置浏览器不可用），已切换手动输入'
+            : '当前浏览器不支持语音输入（微信内置浏览器不可用），已切换手动输入');
         return;
     }
     if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
@@ -1826,8 +1837,9 @@ function startVoice(mode) {
     rec.onerror = ev => {
         const name = ev && ev.error;
         let msg = '语音识别失败，已切换手动输入';
-        if (name === 'not-allowed' || name === 'service-not-allowed') msg = '麦克风权限被拒绝，已切换手动输入';
+        if (name === 'not-allowed' || name === 'service-not-allowed') msg = '麦克风权限被拒绝：请在浏览器地址栏点麦克风图标允许，或到系统设置开启';
         else if (name === 'no-speech') msg = '没有听清，已切换手动输入';
+        else if (name === 'network') msg = '语音服务网络异常，请稍后再试（已切换手动输入）';
         voiceFallback(msg);
     };
     rec.onend = () => {
@@ -1847,17 +1859,20 @@ function startVoice(mode) {
         }
         else voiceFallback('未识别到内容，已切换手动输入');
     };
-    const start = () => {
-        try { rec.start(); }
-        catch (e) { voiceFallback('无法启动语音（请允许麦克风权限），已切换手动输入'); }
+    /* 直接启动识别：浏览器会自行弹出麦克风权限；避免先 getUserMedia 再异步启动导致手机端权限弹窗失效 */
+    const startRec = () => {
+        try { rec.start(); return true; }
+        catch (e) { return false; }
     };
-    /* 先申请麦克风权限再启动识别（部分浏览器首次点击必须） */
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => { stream.getTracks().forEach(t => t.stop()); start(); })
-            .catch(() => voiceFallback('麦克风权限被拒绝，已切换手动输入'));
-    } else {
-        start();
+    if (!startRec()) {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            /* 个别安卓/网页视图需先用 getUserMedia 预热麦克风权限再启动 */
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => { stream.getTracks().forEach(t => t.stop()); if (rec && !voiceManualStop) startRec(); })
+                .catch(() => voiceFallback('麦克风权限被拒绝：请在浏览器地址栏点麦克风图标允许，或到系统设置开启'));
+        } else {
+            voiceFallback('无法启动语音（请允许麦克风权限），已切换手动输入');
+        }
     }
 }
 function voiceFallback(msg) {
@@ -1945,14 +1960,13 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 /* ================= DEMO 操作引导（重置后自动弹出） ================= */
 const GUIDE_KEY = 'gaoding-xingkong-guide';
 const GUIDE_STEPS = [
-    { title: '轻松玩转 ①', text: '欢迎来到待炸星空！\n上下滑动星空二向箔（圆片），\n可以把搞定 or 没搞定的事情狠狠压扁或者点爆，\n变成星空中的一颗星星，\n这两个动作被称为「炸星」。' },
-    { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊：\n语音生成二向箔圆片（待办事项）；\n长按：调出输入框。' },
-    { title: '轻松玩转 ③', text: '点击搜索胶囊：\n语音生成搜索内容；\n长按：调出输入框。' },
-    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片）：\n建议语音输入，\n使用「时间 + 对象 + 动作」格式；\n例如：8点要去买咖啡，提早十分钟提醒我。' },
-    { title: '轻松玩转 ⑤', text: '点击星空背景左边：圆片散开；\n点击右边：合拢；\n双击背景：全开 / 合拢；\n按住背景横向拖动：左散右合；\n按住背景纵向拖动：旋转角度，选个喜欢的角度。' },
-    { title: '轻松玩转 ⑥', text: '连点五下右上角时间：\n弹出炸星汇总；\n点年份：年度汇总。' },
-    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」：\n跳出本使用说明（随时可看）。' },
-    { title: '轻松玩转 ⑧', text: '点击右下角「重置」按钮，\n连点五下确认后：\n清空所有数据、炸星归零。\n谨慎操作。' }
+    { title: '第 1 步 · 炸星动作', text: '欢迎来到待炸星空！\n上下滑动星空二向箔（圆片），\n可以把搞定 or 没搞定的事情狠狠压扁或者点爆，\n变成星空中的一颗星星，\n这两个动作被称为「炸星」。' },
+    { title: '第 2 步 · 声纹建卡', text: '单击左下角的声纹胶囊：\n语音生成二向箔圆片（待办事项）；\n长按：调出输入框。\n最多同时生成 20 张待炸圆片。' },
+    { title: '第 3 步 · 搜索胶囊', text: '点击搜索胶囊：\n语音生成搜索内容；\n长按：调出输入框。' },
+    { title: '第 4 步 · 生成待办', text: '生成待办事项（也就是待炸圆片）：\n建议语音输入，\n使用「时间 + 对象 + 动作」格式；\n例如：8点要去买咖啡，提早十分钟提醒我。' },
+    { title: '第 5 步 · 背景散开/旋转', text: '点击星空背景左边：圆片散开；\n点击右边：合拢；\n双击背景：全开 / 合拢；\n按住背景横向拖动：左散右合；\n按住背景纵向拖动：旋转角度，选个喜欢的角度。' },
+    { title: '第 6 步 · 日期汇总', text: '连点五下右上角时间：\n弹出炸星汇总；\n点年份：年度汇总。' },
+    { title: '第 7 步 · 重开引导', text: '连点左上角「待炸星空」：\n跳出本使用说明（随时可看）。' }
 ];
 let guideStep = 0;
 function renderGuide() {
@@ -2029,13 +2043,13 @@ function openPeriodSummary(part) {
     const key = s => String(s.doneAt).slice(0, 10);
     let title, stars;
     if (part === 'y') {
-        stars = completedStars.filter(s => key(s).slice(0, 4) === String(y));
+        stars = completedStars.filter(s => !s.demo && key(s).slice(0, 4) === String(y));
         title = y + ' 年炸星汇总';
     } else if (part === 'm') {
-        stars = completedStars.filter(s => key(s).slice(0, 7) === y + '-' + String(m).padStart(2, '0'));
+        stars = completedStars.filter(s => !s.demo && key(s).slice(0, 7) === y + '-' + String(m).padStart(2, '0'));
         title = y + ' 年 ' + m + ' 月炸星汇总';
     } else {
-        stars = completedStars.filter(s => key(s) === y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'));
+        stars = completedStars.filter(s => !s.demo && key(s) === y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'));
         title = '今日（' + y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0') + '）炸星汇总';
     }
     openSummary(title, stars);
@@ -2070,6 +2084,7 @@ function applySearch() {
     const kw = document.getElementById('search-input').value.trim();
     const date = document.getElementById('search-date').value;
     const matched = completedStars.filter(s =>
+        !s.demo &&
         (!kw || String(s.text || '').includes(kw)) &&
         (!date || String(s.doneAt).slice(0, 10) === date)
     );
