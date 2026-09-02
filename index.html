@@ -76,7 +76,7 @@ body::after {
 .hud-corner.br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
 .hud-top { position: absolute; top: 18px; left: 0; width: 100%; display: flex;
     justify-content: space-between; padding: 0 30px; font-size: 12px; letter-spacing: 2px; color: #66d9ff; }
-.hud-top .sys-name { color: #fff; font-weight: 600; text-shadow: 0 0 8px rgba(0,170,255,0.6);
+.hud-top .sys-name { font-size: 20px; color: #fff; font-weight: 600; text-shadow: 0 0 8px rgba(0,170,255,0.6);
     cursor: pointer; pointer-events: auto; transition: text-shadow .2s; }
 .hud-top .sys-name:hover { text-shadow: 0 0 16px rgba(0,220,255,0.95); }
 .hud-bottom { position: absolute; bottom: 24px; left: 0; width: 100%; text-align: center;
@@ -532,7 +532,7 @@ if (location.search.indexOf('reset') >= 0) {
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
 /* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v17-2026-09-01-guide5';
+const DATA_VERSION = 'v19-2026-09-01-reset5';
 {
     let storedVersion = null;
     try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
@@ -748,6 +748,8 @@ let appVisible = false;          /* 开屏是否完全消失（提示只在完�
 let flipFloat = 0;               /* 合拢翻页：堆叠显示偏移（float，逐帧缓动） */
 let flipTarget = 0;
 let lastFlip = 0;                /* 最近翻页时间（闲置后红温恢复顶置） */
+let flipDrag = 0;                /* 翻页跟手滑动（px，松手缓动归零） */
+let pageTurn = 0;                /* 顶部圆片翻页角度（deg） */
 let timeScale = 1;               /* 爆炸慢动作：0~1 时间缩放 */
 function slowmo(scale, ms) {
     timeScale = scale;
@@ -1117,23 +1119,22 @@ renderCards();
 
 /* 拖拽交互：横向 = 整环循环滑动；纵向 = 抽离圆片（上滑收星 / 下滑撕碎 / 回弹） */
 let vDrag = null;
-ringBurst.addEventListener('pointerdown', e => {
-    const card = e.target.closest('.rb-card');
-    if (!card || e.target.closest('input,textarea,button')) return;
+function dragStart(x, y, el) {
+    if (pointerDrag) return;
     dragActive = true;
     burstHoverEl = null;                         /* 拖拽开始时清掉悬停高亮 */
-    const rect = card.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
     pointerDrag = {
-        sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: false,
-        t0: performance.now(), mode: null, el: card,
+        sx: x, sy: y, dx: 0, dy: 0, moved: false,
+        t0: performance.now(), mode: null, el,
         baseCY: rect.y + rect.height / 2,
-        touch: e.pointerType === 'touch'
+        startBurst: burstCurrent
     };
-});
-window.addEventListener('pointermove', e => {
+}
+function dragMove(x, y) {
     if (!pointerDrag) return;
-    const dx = e.clientX - pointerDrag.sx;
-    const dy = e.clientY - pointerDrag.sy;
+    const dx = x - pointerDrag.sx;
+    const dy = y - pointerDrag.sy;
     pointerDrag.dx = dx;
     pointerDrag.dy = dy;
     if (!pointerDrag.moved && Math.hypot(dx, dy) > 8) pointerDrag.moved = true;
@@ -1144,8 +1145,10 @@ window.addEventListener('pointermove', e => {
         }
     }
     if (pointerDrag.mode === 'h') {
-        if (burstCurrent < 0.5) {
-            flipFloat = flipTarget + dx / currentSlotPx;   /* 合拢翻页跟手 */
+        if (pointerDrag.startBurst < 0.5) {
+            flipFloat = flipTarget + dx / 70;              /* 合拢翻页：每 70px 翻一页 */
+            flipDrag = dx;                                 /* 整摞 1:1 跟手滑动 */
+            pageTurn = Math.max(-40, Math.min(40, dx * 0.45));   /* 顶部圆片翻页角 */
             lastFlip = Date.now();
         } else {
             fanOffset = dx / currentSlotPx;                /* 展开：整环 1:1 跟手 */
@@ -1166,7 +1169,27 @@ window.addEventListener('pointermove', e => {
         hint.classList.toggle('hot', vDrag.zone === 'bottom');
         hint.textContent = vDrag.zone === 'top' ? '✦ 收为星点' : (vDrag.zone === 'bottom' ? '✧ 撕碎释放' : '');
     }
+}
+/* 指针事件（现代浏览器） */
+ringBurst.addEventListener('pointerdown', e => {
+    const card = e.target.closest('.rb-card');
+    if (!card || e.target.closest('input,textarea,button')) return;
+    dragStart(e.clientX, e.clientY, card);
 });
+window.addEventListener('pointermove', e => dragMove(e.clientX, e.clientY));
+/* touch 兜底（老浏览器 / 内嵌 WebView 无 pointer 事件时） */
+document.addEventListener('touchstart', e => {
+    if (pointerDrag) return;
+    const card = e.target.closest('.rb-card');
+    if (!card || e.target.closest('input,textarea,button')) return;
+    dragStart(e.touches[0].clientX, e.touches[0].clientY, card);
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+    if (!pointerDrag || !e.touches.length) return;
+    dragMove(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+document.addEventListener('touchend', endDrag);
+document.addEventListener('touchcancel', endDrag);
 function endDrag() {
     if (!pointerDrag) return;
     const d = pointerDrag;
@@ -1199,10 +1222,16 @@ function endDrag() {
     steps = Math.max(-6, Math.min(6, steps));   /* 单次最多连滑 6 格 */
     const dir = steps > 0 ? 1 : -1;
     const n = Math.abs(steps);
-    if (burstCurrent < 0.5) {
+    if (d.startBurst < 0.5) {
         /* 合拢：翻页（切换堆叠最上面那张），手势优先于红温顶置 */
-        flipTarget += dir * n;
-        flipFloat = flipTarget + d.dx / currentSlotPx - dir * n;
+        let steps2 = Math.round(d.dx / 70);
+        if (steps2 === 0 && Math.abs(d.dx) > 25) steps2 = d.dx > 0 ? 1 : -1;
+        if (Math.abs(vx) > 900) steps2 += Math.sign(vx) * Math.min(3, Math.floor((Math.abs(vx) - 900) / 500));
+        steps2 = Math.max(-6, Math.min(6, steps2));
+        flipTarget += steps2;
+        flipFloat = flipTarget + (d.dx - steps2 * 70) / 70;
+        flipDrag = d.dx - steps2 * 70;                    /* 消除跳变，平滑归位 */
+        pageTurn = Math.max(-40, Math.min(40, (d.dx - steps2 * 70) * 0.45));
         lastFlip = Date.now();
     } else {
         if (n > 0) {
@@ -1264,6 +1293,10 @@ function burstLayout() {
     flipFloat += (flipTarget - flipFloat) * 0.14 * timeScale;
     if (Math.abs(flipTarget - flipFloat) < 0.01) flipFloat = flipTarget;
     if (flipTarget !== 0 && Date.now() - lastFlip > 8000) flipTarget = 0;
+    flipDrag += (0 - flipDrag) * 0.16 * timeScale;
+    pageTurn += (0 - pageTurn) * 0.14 * timeScale;
+    if (Math.abs(flipDrag) < 0.5) flipDrag = 0;
+    if (Math.abs(pageTurn) < 0.5) pageTurn = 0;
     /* 松手后惯性滑回/回弹 */
     if (!dragActive && Math.abs(fanOffset) > 0.005) {
         fanOffset += (0 - fanOffset) * 0.14 * timeScale;
@@ -1295,10 +1328,19 @@ function burstLayout() {
         const orderVal = collapsedMode ? dispRank : basePosV;
         /* 右手炸星：合拢时最近的那张在右侧最上面，后面的往左上方收 */
         const midN = (N - 1) / 2;
+        const isTopCard = Math.min(dispRank, N - dispRank) < 0.4;   /* 当前最上面那张 */
         const sx = RB_CX + (midN - stackBlend) * 5.5;
         const sy = RB_CENTER_Y + (midN - stackBlend) * 1.4;
         let x = sx + (ax - sx) * eased;
         let y = sy + (ay - sy) * eased;
+        let fadeMul = 1;
+        if (eased < 0.5) {
+            x += flipDrag;                                 /* 合拢：整摞跟手滑动 */
+            if (isTopCard && Math.abs(flipDrag) > 0.5) {
+                x += flipDrag * 0.6;                       /* 当前卡片跟手滑出 */
+                fadeMul = 1 - 0.4 * Math.min(1, Math.abs(flipDrag) / 70);
+            }
+        }
         let z = collapsedMode ? (N - orderVal) * 2.5 : orderVal * 2.5;
         /* 收拢时缩小沉入星云深处，展开时放大浮出 → 钻出感 */
         let scale = 0.82 + 0.18 * eased;
@@ -1395,8 +1437,9 @@ function burstLayout() {
                 ? '0 0 80px rgba(255,150,60,0.95), 0 0 180px rgba(255,120,50,0.5), inset 0 0 44px rgba(255,140,60,0.4), 0 18px 40px rgba(0,0,0,0.4)'
                 : '0 0 80px rgba(120,235,255,0.95), 0 0 180px rgba(0,170,255,0.5), inset 0 0 44px rgba(0,170,255,0.32), 0 18px 40px rgba(0,0,0,0.4)';
         } else {
-            c.style.transform = `translate3d(${x - RB_HALF}px, ${y - RB_HALF}px, ${z}px) scale(${scale})`;
-            c.style.opacity = baseOp * fade;
+            const turn = (collapsedMode && isTopCard && Math.abs(pageTurn) > 0.5) ? ` rotateY(${pageTurn}deg)` : '';
+            c.style.transform = `translate3d(${x - RB_HALF}px, ${y - RB_HALF}px, ${z}px) scale(${scale})${turn}`;
+            c.style.opacity = baseOp * fade * fadeMul;
             /* 层级：合拢时截止最近的排最上面；展开时最右边的排最上面 */
             c.style.zIndex = burstSelected === c ? 1000 : (isHover ? 950 : (collapsedMode ? N - orderVal : orderVal + 1));
             c.style.boxShadow = burstSelected === c
@@ -1895,23 +1938,24 @@ capsule.addEventListener('pointercancel', () => {
     capsulePress = null;
 });
 
-/* DEMO 专用重置按钮：点一次进入确认，再点一次清空并重铺 20 张（正式版移除） */
-let resetArmed = false;
+/* DEMO 专用重置按钮：连点 5 下确认后清空全部数据（谨慎操作） */
+let resetClicks = 0;
 let resetTimer = null;
 document.getElementById('reset-btn').addEventListener('click', () => {
     const btn = document.getElementById('reset-btn');
-    if (!resetArmed) {
-        resetArmed = true;
+    resetClicks++;
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+        resetClicks = 0;
+        btn.classList.remove('armed');
+        btn.textContent = '重置';
+    }, 3000);
+    if (resetClicks < 5) {
         btn.classList.add('armed');
-        btn.textContent = '确认？';
-        resetTimer = setTimeout(() => {
-            resetArmed = false;
-            btn.classList.remove('armed');
-            btn.textContent = '重置';
-        }, 3000);
+        btn.textContent = '重置 ' + resetClicks + '/5';
         return;
     }
-    clearTimeout(resetTimer);
+    resetClicks = 0;
     try {
         localStorage.removeItem('gaoding-xingkong-todos');
         localStorage.removeItem('gaoding-xingkong-stars');
@@ -1924,14 +1968,14 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 /* ================= DEMO 操作引导（重置后自动弹出） ================= */
 const GUIDE_KEY = 'gaoding-xingkong-guide';
 const GUIDE_STEPS = [
-    { title: '轻松玩转 ①', text: '欢迎来到待炸星空！\n上下滑动星空二向箔（圆片），\n可以把搞定 or 没搞定的事情\n狠狠压扁或者点爆，\n变成星空中的一颗星星，\n这两个动作被称为「炸星」。' },
-    { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊，可以语音生成二向箔圆片（待办事项）；长按可以调出输入框。' },
-    { title: '轻松玩转 ③', text: '点击搜索胶囊，可以语音生成搜索内容；长按可以调出输入框。' },
-    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片），\n建议语音输入，\n使用「时间 + 对象 + 动作」格式，\n例如：8点要去买咖啡，提早十分钟提醒我。' },
-    { title: '轻松玩转 ⑤', text: '点击星空背景的左边，\n圆片会散开；点击右边会合拢。\n按住星空拖动，可以旋转调整星空背景，\n选个自己喜欢的角度。' },
-    { title: '轻松玩转 ⑥', text: '连点五下右上角时间，\n会有炸星汇总；\n点年份就是年度汇总。' },
-    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」，\n会跳出本使用说明（随时可看）。' },
-    { title: '轻松玩转 ⑧', text: '连点右下角的「重置」按钮，\n清空所有数据、炸星归零。' }
+    { title: '轻松玩转 ①', text: '欢迎来到待炸星空！\n上下滑动星空二向箔（圆片），\n可以把搞定 or 没搞定的事情狠狠压扁或者点爆，\n变成星空中的一颗星星，\n这两个动作被称为「炸星」。' },
+    { title: '轻松玩转 ②', text: '单击左下角的声纹胶囊：\n语音生成二向箔圆片（待办事项）；\n长按：调出输入框。' },
+    { title: '轻松玩转 ③', text: '点击搜索胶囊：\n语音生成搜索内容；\n长按：调出输入框。' },
+    { title: '轻松玩转 ④', text: '生成待办事项（也就是待炸圆片）：\n建议语音输入，\n使用「时间 + 对象 + 动作」格式；\n例如：8点要去买咖啡，提早十分钟提醒我。' },
+    { title: '轻松玩转 ⑤', text: '点击星空背景左边：圆片散开；\n点击右边：圆片合拢；\n按住星空拖动：旋转调整背景角度，\n选个自己喜欢的角度。' },
+    { title: '轻松玩转 ⑥', text: '连点五下右上角时间：\n弹出炸星汇总；\n点年份：年度汇总。' },
+    { title: '轻松玩转 ⑦', text: '连点左上角「待炸星空」：\n跳出本使用说明（随时可看）。' },
+    { title: '轻松玩转 ⑧', text: '点击右下角「重置」按钮，\n连点五下确认后：\n清空所有数据、炸星归零。\n谨慎操作。' }
 ];
 let guideStep = 0;
 function renderGuide() {
