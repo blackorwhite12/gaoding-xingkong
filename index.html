@@ -130,8 +130,10 @@ body::after {
 .rb-card .rb-count.hot { color: #ffb26e; text-shadow: 0 0 8px rgba(255,120,60,0.7); }
 .rb-card .rb-count.over { color: #ff7a7a; text-shadow: 0 0 8px rgba(255,60,60,0.7); }
 .rb-card .rb-time { position: absolute; bottom: 18px; left: 0; width: 100%;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
     font-size: 11px; color: rgba(170,230,255,0.85); letter-spacing: 1px; }
-.rb-card .rb-day { color: #ffd166; font-weight: 700; }
+.rb-card .rb-day { color: #ffd166; font-weight: 700; font-size: 10px; }
+.rb-card .rb-time-txt { color: rgba(170,230,255,0.9); }
 .rb-card.empty { border-style: solid; border-color: rgba(0,170,255,0.22);
     background: radial-gradient(circle at 50% 55%, rgba(0,70,130,0.20), rgba(0,18,42,0.62) 72%); }
 .rb-empty { font-size: 24px; color: rgba(120,190,230,0.25); letter-spacing: 1px; }
@@ -823,8 +825,11 @@ function fmtCountdown(remainMs) {
     const s = Math.floor(remainMs / 1000);
     const sec = s % 60, min = Math.floor(s / 60) % 60, hrs = Math.floor(s / 3600);
     const day = Math.floor(hrs / 24);
-    const hh = String(hrs % 24).padStart(2, '0'), mm = String(min).padStart(2, '0'), ss = String(sec).padStart(2, '0');
-    return day > 0 ? (day + '天 ' + hh + ':' + mm) : (hh + ':' + mm + ':' + ss);
+    /* 纯时长写法，避免像钟表时间：剩 X天X时 / 剩 X时X分 / 剩 X分X秒 / 剩 X秒 */
+    if (day > 0) return '剩 ' + day + '天' + ((hrs % 24) ? (hrs % 24) + '时' : '');
+    if (hrs > 0) return '剩 ' + hrs + '时' + min + '分';
+    if (min > 0) return '剩 ' + min + '分' + sec + '秒';
+    return '剩 ' + sec + '秒';
 }
 /* 截止日相对今天的偏移：0=今天、+1=明天、+2=后天、-1=昨天…（圆片用 +1/+2/-1 标注） */
 function dayOffsetOf(t) {
@@ -847,7 +852,9 @@ function refreshCardTimes(c, t, now) {
     if (tm) {
         const off = dayOffsetOf(t);
         const badge = off === 0 ? '' : (off > 0 ? '+' + off : String(off));
-        tm.innerHTML = (badge ? '<span class="rb-day">' + badge + '</span> ' : '') + escapeHtml(String(t.deadline));
+        /* 日期偏移徽标放时间上方一行；今天无徽标 */
+        tm.innerHTML = (badge ? '<span class="rb-day">' + badge + '</span>' : '') +
+            '<span class="rb-time-txt">' + escapeHtml(String(t.deadline)) + '</span>';
     }
 }
 function updateCardCountdowns() {
@@ -1763,7 +1770,7 @@ function parseTimeIntent(raw) {
     const dateWord = (s.match(/(后天|明天|今天|昨天|前天)/) || [])[1] || null;
     const period = (s.match(/(晚上|下午|傍晚|上午|早上|早晨|凌晨)/) || [])[1] || null;
     let timePhrase = '';
-    const NUM = '([一二三四五六七八九十]+|\\d{1,2})';
+    const NUM = '([一二两三四五六七八九十]+|\\d{1,2})';
     let tm = s.match(new RegExp(NUM + '\\s*[点时:：]\\s*' + NUM + '\\s*分?'));
     if (!tm) tm = s.match(new RegExp(NUM + '\\s*点半'));
     if (!tm) tm = s.match(new RegExp(NUM + '\\s*[点时]'));
@@ -1800,11 +1807,12 @@ function parseTimeIntent(raw) {
         if (wm) { const n = cnTimeNum(wm[1]); if (n != null) { out.warnMin = n; warnPhrase = wm[0]; } }
     }
     let title = s;
-    if (timePhrase) title = title.replace(timePhrase, '');
+    if (timePhrase) title = title.replace(timePhrase + '钟', '').replace(timePhrase, '');
     if (warnPhrase) title = title.replace(warnPhrase, '');
     if (dateWord) title = title.replace(dateWord, '');
     if (timePhrase && period) title = title.replace(period, '');
     title = title.replace(/提醒我/g, '').replace(/提醒$/g, '').replace(/[，,。]/g, ' ');
+    title = title.replace(/^[了钟]/, '');   /* 清掉"5点了/10点钟"残留的"了/钟" */
     title = polishText(simplifyText(title));
     out.title = title || null;   /* 时间已单独解析进 deadline，中间文字只保留动作 */
     return out;
