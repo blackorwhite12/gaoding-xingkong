@@ -82,7 +82,8 @@ body::after {
 .hud-corner.bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
 .hud-corner.br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
 .hud-top { position: absolute; top: 18px; left: 0; width: 100%; display: flex;
-    justify-content: space-between; padding: 0 30px; font-size: 12px; letter-spacing: 2px; color: #66d9ff; }
+    flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 0 30px;
+    font-size: 12px; letter-spacing: 2px; color: #66d9ff; }
 .hud-top .sys-name { font-size: 20px; color: #fff; font-weight: 600; text-shadow: 0 0 8px rgba(0,170,255,0.6);
     cursor: pointer; pointer-events: auto; transition: text-shadow .2s; }
 .hud-top .sys-name:hover { text-shadow: 0 0 16px rgba(0,220,255,0.95); }
@@ -95,8 +96,7 @@ body::after {
     text-shadow: 0 0 14px rgba(0,170,255,0.6), 0 0 36px rgba(0,170,255,0.3); }
 .hud-date small { display: block; font-size: 10px; font-weight: 400; letter-spacing: 3px;
     color: rgba(150,222,255,0.7); margin-top: 4px; }
-.hud-tip { position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
-    font-size: 11px; letter-spacing: 2px; color: rgba(0,170,255,0.6); }
+.hud-tip { font-size: 10px; letter-spacing: 2px; color: rgba(0,170,255,0.55); margin-top: 2px; }
 
 /* ---------- 环炸 · RING BURST ---------- */
 #ring-burst {
@@ -398,9 +398,9 @@ body::after {
     <div class="hud-corner bl"></div><div class="hud-corner br"></div>
     <div class="hud-top">
         <span class="sys-name">待炸星空</span>
+        <span class="hud-tip">move finger to fan/spin</span>
     </div>
     <div class="hud-date" id="hud-date"></div>
-    <div class="hud-tip">move mouse / finger to fan</div>
     <div class="hud-bottom" id="hud-bottom" style="display:none"></div>
     <div class="hud-data" id="hud-data" style="display:none"></div>
 </div>
