@@ -104,6 +104,18 @@ body::after {
     width: 190px; height: 190px; perspective: 900px; z-index: 60;
     touch-action: none;
 }
+/* 炸星冲击：只对圆片组做轻微"膨胀/回弹"或"抖动"，保留 translate 居中；
+ * 不改动 body（在 body 上 transform 会让 position:fixed 的胶囊/HUD 相对 body 错位、被挤出屏幕） */
+#ring-burst.disc-punch { animation: discPunch .32s ease-out; }
+@keyframes discPunch { 0% { transform: translate(-50%, -50%) scale(1); }
+    45% { transform: translate(-50%, -50%) scale(1.035); } 100% { transform: translate(-50%, -50%) scale(1); } }
+#ring-burst.disc-shake { animation: discShake .42s linear; }
+@keyframes discShake { 0% { transform: translate(-50%, -50%); }
+    20% { transform: translate(calc(-50% - 9px), calc(-50% + 2px)); }
+    40% { transform: translate(calc(-50% + 9px), calc(-50% - 2px)); }
+    60% { transform: translate(calc(-50% - 6px), -50%); }
+    80% { transform: translate(calc(-50% + 6px), -50%); }
+    100% { transform: translate(-50%, -50%); } }
 .rb-card {
     position: absolute; inset: 0; width: 190px; height: 190px;
     border: 1px solid rgba(0,200,255,0.8);
@@ -1164,9 +1176,9 @@ function spawnExplosion(el, charge) {
         requestAnimationFrame(() => pt.classList.add('on'));
         setTimeout(() => pt.remove(), 1100);
     }
-    document.body.style.setProperty('--sh', (6 + 7 * charge) + 'px');
-    document.body.classList.add('shake');
-    setTimeout(() => document.body.classList.remove('shake'), 520);
+    ringBurst.classList.remove('disc-shake'); void ringBurst.offsetWidth;
+    ringBurst.classList.add('disc-shake');
+    setTimeout(() => ringBurst.classList.remove('disc-shake'), 520);
     slowmo(Math.max(0.12, 0.28 - 0.14 * charge), 750 + 650 * charge);   /* 蓄力越足慢动作越强 */
     sfx.boom();
     sfx.shatter();
@@ -1499,9 +1511,9 @@ function burstLayout() {
                         spawnFlash(fpx, fpy, 80 + 70 * ch);
                         spawnRings(fpx, fpy, 'in', ch);      /* 全屏向内收缩（吸入感） */
                         spawnSuckBg(fpx, fpy);
-                        document.body.style.setProperty('--sp', (0.98 - 0.05 * ch).toFixed(3));
-                        document.body.classList.add('suck-punch');
-                        setTimeout(() => document.body.classList.remove('suck-punch'), 420);
+                        ringBurst.classList.remove('disc-punch'); void ringBurst.offsetWidth;
+                        ringBurst.classList.add('disc-punch');
+                        setTimeout(() => ringBurst.classList.remove('disc-punch'), 420);
                         sfx.whoosh();
                         sfx.star();
                     }
