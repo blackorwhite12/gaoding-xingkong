@@ -743,6 +743,65 @@ const sfx = {
     shatter() { for (let i = 0; i < 7; i++) tone(1100 + Math.random() * 1800, 0.05, "square", 0.025, 0.05 + i * 0.035); },
     whoosh() { sweep(220, 1500, 0.32, 0.07); }
 };
+/* —— 提醒铃声：Web Audio 现场合成的原创打击乐（行军鼓 + 拍手感）——
+ * 只做"风格相近"的临时编配，不包含任何受版权保护的音频素材。 */
+let _ringNoise = null;
+function _ringNoiseBuf() {
+    if (_ringNoise) return _ringNoise;
+    const len = Math.floor(audioCtx.sampleRate * 1);
+    _ringNoise = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const d = _ringNoise.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return _ringNoise;
+}
+function _ringKick(when, vol) {
+    const t = audioCtx.currentTime + when;
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(165, t);
+    osc.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.24);
+}
+function _ringNoiseHit(when, dur, vol, hp) {
+    const t = audioCtx.currentTime + when;
+    const src = audioCtx.createBufferSource(); src.buffer = _ringNoiseBuf();
+    const g = audioCtx.createGain(); const f = audioCtx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = hp;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t); src.stop(t + dur + 0.03);
+}
+function _ringSnare(when, vol) {
+    _ringNoiseHit(when, 0.13, vol, 1100);
+    tone(190, 0.07, 'triangle', vol * 0.55, when);
+}
+function _ringHat(when, vol) { _ringNoiseHit(when, 0.05, vol, 6500); }
+/* 截止提醒：几秒的"行军鼓"节奏（重拍鼓 + 反拍军鼓 + 八分帽），接近开场鼓点的行进感 */
+sfx.alarm = function (seconds = 4) {
+    ensureAudio();
+    if (!audioCtx) return;
+    const spb = 60 / 100;                       /* 100 BPM 四四拍 */
+    const beats = Math.max(4, Math.floor(seconds / spb));
+    for (let b = 0; b < beats; b++) {
+        const t = b * spb;
+        const pos = b % 4;
+        if (pos === 0) { _ringKick(t, 0.55); _ringSnare(t, 0.2); }         /* 重鼓+拍手 */
+        else if (pos === 2) { _ringKick(t, 0.42); _ringSnare(t, 0.32); }   /* 第3拍军鼓 */
+        else _ringSnare(t, 0.26);                                          /* 2/4 拍军鼓 */
+        _ringHat(t, 0.11);
+        _ringHat(t + spb / 2, 0.06);
+    }
+};
+/* 预警提醒：轻的两连“叮” */
+sfx.chime = function () {
+    ensureAudio();
+    tone(1046, 0.14, 'sine', 0.1);
+    tone(1568, 0.2, 'sine', 0.09, 0.14);
+};
 
 /* ================= 环炸 · RING BURST ================= */
 const ringBurst = document.getElementById('ring-burst');
@@ -921,12 +980,14 @@ function requestNoti() {
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
     } catch (e) {}
 }
-function fireNoti(t, title, body) {
+function fireNoti(t, title, body, ring) {
     try {
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(title, { body, tag: t.id });
         }
     } catch (e) {}
+    if (ring === 'alarm') sfx.alarm();
+    else if (ring === 'chime') sfx.chime();
     toast(title + '：' + body);
 }
 function scheduleReminders() {
@@ -938,11 +999,11 @@ function scheduleReminders() {
         const warnAt = due - (t.warnMin || 15) * 60000;
         if (warnAt > now) {
             notiTimers.push(setTimeout(() => fireNoti(t, '⚠️ 预警提醒',
-                '「' + t.text + '」将在 ' + t.deadline + ' 截止，已置顶泛红'), warnAt - now));
+                '「' + t.text + '」将在 ' + t.deadline + ' 截止，已置顶泛红', 'chime'), warnAt - now));
         }
         if (due > now) {
             notiTimers.push(setTimeout(() => fireNoti(t, '⏰ 截止提醒',
-                '「' + t.text + '」已到截止时间 ' + t.deadline), due - now));
+                '「' + t.text + '」已到截止时间 ' + t.deadline, 'alarm'), due - now));
         }
     });
 }
