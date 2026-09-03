@@ -1799,6 +1799,18 @@ function parseTimeIntent(raw) {
             if (d.getTime() < Date.now()) out.deadlineDate = dateStr(new Date(Date.now() + DAY));   /* 已是凌晨/早上且已过 → 明天 */
         }
     }
+    /* 相对时间：N分钟后/小时后/天后 → 截止为当前时刻 + 偏移（如「两分钟后上厕所」→ 现在+2分钟） */
+    let relPhrase = '';
+    const rm = s.match(/(\d{1,2}|[一二两三四五六七八九十]+)\s*个?\s*(分钟|小时|天)\s*(后|之后|以后)/);
+    if (rm) {
+        relPhrase = rm[0];
+        const n = cnTimeNum(rm[1]);
+        const unit = rm[2];
+        const ms = unit === '分钟' ? n * 60000 : unit === '小时' ? n * 3600000 : n * 86400000;
+        const d = new Date(Date.now() + ms);
+        out.deadline = fmtTime(d);
+        out.deadlineDate = dateStr(d);
+    }
     let warnPhrase = '';
     let wm = s.match(/(?:提前|提早)\s*半小时/);
     if (wm) { out.warnMin = 30; warnPhrase = wm[0]; }
@@ -1808,6 +1820,7 @@ function parseTimeIntent(raw) {
     }
     let title = s;
     if (timePhrase) title = title.replace(timePhrase + '钟', '').replace(timePhrase, '');
+    if (relPhrase) title = title.replace(relPhrase, '');
     if (warnPhrase) title = title.replace(warnPhrase, '');
     if (dateWord) title = title.replace(dateWord, '');
     if (timePhrase && period) title = title.replace(period, '');
@@ -1857,6 +1870,9 @@ function addTodo(raw) {
     saveTodos();
     refreshCards();
     scheduleReminders();
+    /* 新增圆片：收拢到正面（归零循环偏移），让刚输入的圆片出现在中心可见位置，不用再手动合拢 */
+    burstTarget = 0;
+    fanOffset = 0;
     toast('✦ 已生成待办 #' + String(todos[todos.length - 1].seq).padStart(2, '0'));
     sfx.data();
 }
