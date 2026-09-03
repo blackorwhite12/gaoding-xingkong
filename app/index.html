@@ -124,8 +124,14 @@ body::after {
 .rb-card .rb-name { font-size: 18px; font-weight: 500; color: #cfefff; letter-spacing: 0.5px;
     line-height: 1.4; max-width: 150px; overflow: hidden;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.rb-card .rb-count { font-size: 11px; font-weight: 600; color: #8ff0ff; letter-spacing: 1px;
+    line-height: 1.3; margin: -6px 0 5px; text-shadow: 0 0 8px rgba(0,190,255,0.6);
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rb-card .rb-count.hot { color: #ffb26e; text-shadow: 0 0 8px rgba(255,120,60,0.7); }
+.rb-card .rb-count.over { color: #ff7a7a; text-shadow: 0 0 8px rgba(255,60,60,0.7); }
 .rb-card .rb-time { position: absolute; bottom: 18px; left: 0; width: 100%;
     font-size: 11px; color: rgba(170,230,255,0.85); letter-spacing: 1px; }
+.rb-card .rb-day { color: #ffd166; font-weight: 700; }
 .rb-card.empty { border-style: solid; border-color: rgba(0,170,255,0.22);
     background: radial-gradient(circle at 50% 55%, rgba(0,70,130,0.20), rgba(0,18,42,0.62) 72%); }
 .rb-empty { font-size: 24px; color: rgba(120,190,230,0.25); letter-spacing: 1px; }
@@ -544,7 +550,7 @@ if (location.search.indexOf('reset') >= 0) {
     } catch (e) {}
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
-/* PWA 正式版：已移除"数据版本号变化即清空重置"，用户数据永久留存（可手动 ?reset 或连点重置按钮清空）。 */
+/* 正式版：已移除"数据版本号变化即清空重置"，用户数据永久留存（可 ?reset 或连点重置按钮清空）。 */
 
 /* ================= 待办数据（固定 15 槽位；未完成的一直保留） ================= */
 const TODO_KEY = 'gaoding-xingkong-todos';
@@ -761,6 +767,7 @@ let lastDragMoved = false;
 let currentSlotPx = 86;
 let bootEntered = false;         /* 是否已进入主界面（DEMO 红温提示用） */
 let appVisible = false;          /* 开屏是否完全消失（提示只在完全进入后弹） */
+let lastCountdownTick = 0;       /* 圆片倒计时节流（约每秒刷新一次） */
 let lastRotate = 0;              /* 最近一次循环转动时间（闲置后恢复红温顶置） */
 let timeScale = 1;               /* 爆炸慢动作：0~1 时间缩放 */
 function slowmo(scale, ms) {
@@ -810,6 +817,43 @@ function buildOrder() {
 function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+/* 截止倒计时文案：<1 天用 HH:MM:SS 秒级跳动；≥1 天用 D天 HH:MM；已到 → 已到期 */
+function fmtCountdown(remainMs) {
+    if (remainMs <= 0) return '已到期';
+    const s = Math.floor(remainMs / 1000);
+    const sec = s % 60, min = Math.floor(s / 60) % 60, hrs = Math.floor(s / 3600);
+    const day = Math.floor(hrs / 24);
+    const hh = String(hrs % 24).padStart(2, '0'), mm = String(min).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+    return day > 0 ? (day + '天 ' + hh + ':' + mm) : (hh + ':' + mm + ':' + ss);
+}
+/* 截止日相对今天的偏移：0=今天、+1=明天、+2=后天、-1=昨天…（圆片用 +1/+2/-1 标注） */
+function dayOffsetOf(t) {
+    if (!t.deadlineDate) return 0;
+    const target = new Date(t.deadlineDate + 'T00:00:00');
+    const today = new Date(todayKey() + 'T00:00:00');
+    return Math.round((target - today) / 86400000);
+}
+/* 刷新某张圆片的倒计时与底部时间（含日期偏移徽标）；在 createCard 与每秒 tick 中调用 */
+function refreshCardTimes(c, t, now) {
+    const due = tsOf(t.deadline, t.deadlineDate);
+    const remain = due - (now || Date.now());
+    const cnt = c.querySelector('.rb-count');
+    if (cnt) {
+        cnt.textContent = remain <= 0 ? '已到期' : ('距截止 ' + fmtCountdown(remain));
+        cnt.classList.toggle('over', remain <= 0);
+        cnt.classList.toggle('hot', remain > 0 && tsOf(t.deadline, t.deadlineDate) - (now || Date.now()) <= (t.warnMin || 10) * 60000);
+    }
+    const tm = c.querySelector('.rb-time');
+    if (tm) {
+        const off = dayOffsetOf(t);
+        const badge = off === 0 ? '' : (off > 0 ? '+' + off : String(off));
+        tm.innerHTML = (badge ? '<span class="rb-day">' + badge + '</span> ' : '') + escapeHtml(String(t.deadline));
+    }
+}
+function updateCardCountdowns() {
+    const now = Date.now();
+    rbCards.forEach(c => { if (c._todo) refreshCardTimes(c, c._todo, now); });
+}
 function createCard(t) {
     const c = document.createElement('div');
     c.className = 'rb-card';
@@ -818,8 +862,10 @@ function createCard(t) {
     c.innerHTML = `<div class="rb-urgent"></div>
         <div class="rb-prewarn"></div>
         <span class="rb-num">${String(t.seq).padStart(2, '0')}</span>
+        <span class="rb-count"></span>
         <span class="rb-name">${escapeHtml(t.text)}</span>
-        <span class="rb-time">${t.start} → ${t.deadline}</span>`;
+        <span class="rb-time"></span>`;
+    refreshCardTimes(c, t, Date.now());
     c.addEventListener('mouseenter', () => { if (!burstSelected) { sfx.hover(); burstHoverEl = c; } });
     c.addEventListener('mouseleave', () => { if (burstHoverEl === c) burstHoverEl = null; });
     c.addEventListener('click', () => {
@@ -1714,7 +1760,7 @@ function polishText(s) {
 function parseTimeIntent(raw) {
     let s = String(raw || '');
     const out = { title: null, deadline: null, deadlineDate: null, warnMin: null };
-    const dateWord = (s.match(/(明天|后天)/) || [])[1] || null;
+    const dateWord = (s.match(/(后天|明天|今天|昨天|前天)/) || [])[1] || null;
     const period = (s.match(/(晚上|下午|傍晚|上午|早上|早晨|凌晨)/) || [])[1] || null;
     let timePhrase = '';
     const NUM = '([一二三四五六七八九十]+|\\d{1,2})';
@@ -1725,15 +1771,25 @@ function parseTimeIntent(raw) {
         timePhrase = tm[0];
         let h = cnTimeNum(tm[1]) || 0;
         const min = tm[2] !== undefined ? cnTimeNum(tm[2]) : (timePhrase.indexOf('半') >= 0 ? 30 : 0);
+        /* 显式下午/晚上/傍晚 → 加 12 时 */
         if ((period === '晚上' || period === '下午' || period === '傍晚') && h < 12) h += 12;
+        /* 没说上下午、也没说日期（今天）且 1~11 点；上午已过 → 当作下午（如现在7点说"5点" → 17:00） */
+        else if (!period && !dateWord && h >= 1 && h <= 11) {
+            const am = new Date(); am.setHours(h, min, 0, 0);
+            if (am.getTime() < Date.now()) h += 12;
+        }
         if (h >= 24) h = 0;
         out.deadline = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
-        if (dateWord === '后天') out.deadlineDate = dateStr(new Date(Date.now() + 2 * 86400000));
-        else if (dateWord === '明天') out.deadlineDate = dateStr(new Date(Date.now() + 86400000));
+        const DAY = 86400000;
+        if (dateWord === '后天') out.deadlineDate = dateStr(new Date(Date.now() + 2 * DAY));
+        else if (dateWord === '明天') out.deadlineDate = dateStr(new Date(Date.now() + DAY));
+        else if (dateWord === '昨天') out.deadlineDate = dateStr(new Date(Date.now() - DAY));
+        else if (dateWord === '前天') out.deadlineDate = dateStr(new Date(Date.now() - 2 * DAY));
+        else if (dateWord === '今天') out.deadlineDate = dateStr(new Date());
         else {
             const d = new Date();
             d.setHours(h, min, 0, 0);
-            if (d.getTime() < Date.now()) out.deadlineDate = dateStr(new Date(Date.now() + 86400000));   /* 已过 → 明天 */
+            if (d.getTime() < Date.now()) out.deadlineDate = dateStr(new Date(Date.now() + DAY));   /* 已是凌晨/早上且已过 → 明天 */
         }
     }
     let warnPhrase = '';
@@ -2197,6 +2253,9 @@ function animate() {
     mist.rotation.z += 0.0002 * timeScale;
     stars.rotation.y += 0.00015 * timeScale;
     controls.update();
+    /* 圆片倒计时：约每秒刷新一次，避免逐帧写 DOM */
+    const cdPerf = performance.now();
+    if (cdPerf - lastCountdownTick >= 1000) { lastCountdownTick = cdPerf; updateCardCountdowns(); }
     /* 搜索命中：星点放大呼吸闪烁 */
     const tNow = performance.now() / 1000;
     starSprites.forEach(sp => {
@@ -2245,9 +2304,7 @@ window.addEventListener('resize', () => {
 /* PWA：注册 Service Worker（需 HTTPS / 本地 http；file:// 下不生效） */
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').then(function () {
-            /* 可安装提示通常由浏览器根据 manifest + sw 判定后自动出现 */
-        }).catch(function (e) { console.warn('SW 注册失败', e); });
+        navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW 注册失败', e); });
     });
 }
 </script>
