@@ -561,6 +561,16 @@ try { todos = JSON.parse(localStorage.getItem(TODO_KEY)) || []; } catch (e) {}
 function saveTodos() {
     try { localStorage.setItem(TODO_KEY, JSON.stringify(todos)); } catch (e) {}
 }
+/* 一次性迁移：旧版曾把识别出的时间拼回文本（如「8:00 买咖啡」），导致中间文字与底部时间重复。
+ * 这里清掉真实待办文本开头的时间前缀（示例/无前缀的不受影响），此后新建的待办由 parseTimeIntent 保证只把时间放底部。 */
+{
+    let changed = false;
+    todos.forEach(t => {
+        if (String(t.id).startsWith('demo')) return;
+        if (/^\d{1,2}:\d{2}\s+/.test(t.text)) { t.text = t.text.replace(/^\d{1,2}:\d{2}\s+/, ''); changed = true; }
+    });
+    if (changed) saveTodos();
+}
 function activeTodos() {
     return todos.filter(t => !t.done).sort((a, b) => a.seq - b.seq);   // 只有完成的才消失（转星）
 }
@@ -1706,7 +1716,8 @@ function simplifyText(raw) {
 function polishText(s) {
     return s.replace(/^起床叫(.+)$/, '叫$1起床');
 }
-/* 时间意图解析：例「8点半提醒我要起床叫乖乖，提早五分钟提醒我」→ 截止 08:30、预警 5 分钟、标题「8:30 叫乖乖起床」 */
+/* 时间意图解析：例「8点半提醒我要起床叫乖乖，提早五分钟提醒我」→ 截止 08:30、预警 5 分钟、动作文本「叫乖乖起床」
+ * 说明：识别出的时间只写入 deadline（圆片底部），不再拼回标题，避免中间文字与底部时间重复。 */
 function parseTimeIntent(raw) {
     let s = String(raw || '');
     const out = { title: null, deadline: null, deadlineDate: null, warnMin: null };
@@ -1746,14 +1757,7 @@ function parseTimeIntent(raw) {
     if (timePhrase && period) title = title.replace(period, '');
     title = title.replace(/提醒我/g, '').replace(/提醒$/g, '').replace(/[，,。]/g, ' ');
     title = polishText(simplifyText(title));
-    if (title && out.deadline) {
-        const tstr = (+out.deadline.slice(0, 2)) + ':' + out.deadline.slice(3);
-        const room = Math.max(4, 15 - tstr.length - 1);
-        title = title.length > room ? title.slice(0, room) + '…' : title;
-        out.title = tstr + ' ' + title;
-    } else {
-        out.title = title || null;
-    }
+    out.title = title || null;   /* 时间已单独解析进 deadline，中间文字只保留动作 */
     return out;
 }
 /* 序号按"自然日"维护：同一天真实待办自动续号（炸掉的也接着算），次日零点从 01 重新开始。
