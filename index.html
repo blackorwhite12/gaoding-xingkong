@@ -111,11 +111,13 @@ body::after {
     padding: 12px; text-align: center;
     transition: box-shadow .25s;
 }
-.rb-card .rb-num { font-size: 30px; font-weight: 700; color: #fff;
-    text-shadow: 0 0 10px rgba(0,170,255,0.8); margin-bottom: 5px; }
-.rb-card .rb-name { font-size: 12px; color: #aae6ff; letter-spacing: 1px; line-height: 1.5;
-    max-width: 170px; overflow: hidden; }
-.rb-card .rb-time { font-size: 10px; color: rgba(170,230,255,0.8); letter-spacing: 1px; margin-top: 6px; }
+.rb-card .rb-num { position: absolute; top: 16px; left: 0; width: 100%;
+    font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.75);
+    text-shadow: 0 0 8px rgba(0,170,255,0.7); letter-spacing: 1px; }
+.rb-card .rb-name { font-size: 16px; font-weight: 500; color: #cfefff; letter-spacing: 0.5px;
+    line-height: 1.45; max-width: 150px; overflow: hidden; }
+.rb-card .rb-time { position: absolute; bottom: 18px; left: 0; width: 100%;
+    font-size: 10px; color: rgba(170,230,255,0.8); letter-spacing: 1px; }
 .rb-card.empty { border-style: solid; border-color: rgba(0,170,255,0.22);
     background: radial-gradient(circle at 50% 55%, rgba(0,70,130,0.20), rgba(0,18,42,0.62) 72%); }
 .rb-empty { font-size: 24px; color: rgba(120,190,230,0.25); letter-spacing: 1px; }
@@ -1753,40 +1755,16 @@ function parseTimeIntent(raw) {
     }
     return out;
 }
-/* 序号按"自然日"维护：同一天内自动续号（炸掉的也接着算），次日零点从 01 重新开始 */
-const SEQ_KEY = 'gaoding-xingkong-seq';
-let seqStore = null;
-function loadSeqStore() {
-    if (seqStore) return seqStore;
-    seqStore = { day: '', n: 0 };
-    try { const s = JSON.parse(localStorage.getItem(SEQ_KEY)); if (s && s.day) seqStore = s; } catch (e) {}
-    return seqStore;
-}
-function saveSeqStore() {
-    try { localStorage.setItem(SEQ_KEY, JSON.stringify(seqStore)); } catch (e) {}
-}
-function seedSeq() {
-    const today = todayKey();
-    const s = loadSeqStore();
-    if (s.day === today) return;
-    const isDemo = t => String(t.id).startsWith('demo');
-    const inToday = t => dateStr(new Date(t.createdAt || 0)) === today;
-    /* 正式序号从今天真实待办最大号接着编；若今天还有未炸示例，则从示例最大号之后编，避免撞号 */
-    const realMax = todos.filter(t => !isDemo(t) && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
-    const demoActiveMax = todos.filter(t => isDemo(t) && !t.done && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
-    s.day = today;
-    s.n = Math.max(realMax, demoActiveMax);
-    saveSeqStore();
-}
+/* 序号按"自然日"维护：同一天真实待办自动续号（炸掉的也接着算），次日零点从 01 重新开始。
+ * 示例圆片仅在"未炸"时占号，炸完后释放，因此示例全部炸完后真实待办从 01 开始，不残留示例占号（修复：原先示例炸完仍从 08 续号）。 */
 function nextSeq() {
     const today = todayKey();
-    const s = loadSeqStore();
-    if (s.day !== today) { s.day = today; s.n = 0; }
-    s.n += 1;
-    saveSeqStore();
-    return s.n;
+    const isDemo = t => String(t.id).startsWith('demo');
+    const inToday = t => dateStr(new Date(t.createdAt || 0)) === today;
+    const realMax = todos.filter(t => !isDemo(t) && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
+    const demoActiveMax = todos.filter(t => isDemo(t) && !t.done && t.seq && inToday(t)).reduce((m, t) => Math.max(m, t.seq), 0);
+    return Math.max(realMax, demoActiveMax) + 1;
 }
-seedSeq();                    /* 在 seqStore/SEQ_KEY 声明之后再初始化每日计数器（避免暂时性死区） */
 function defaultDeadline() {
     const d = new Date(Date.now() + 2 * 3600000);
     if (d.getDate() !== new Date().getDate()) d.setHours(23, 59, 0, 0);
