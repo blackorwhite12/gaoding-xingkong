@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>待炸星空 · 全息控制台</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#041022">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="待炸星空">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <script src="lib/three.min.js"></script>
 <script src="lib/OrbitControls.js"></script>
 <script src="lib/EffectComposer.js"></script>
@@ -537,21 +544,7 @@ if (location.search.indexOf('reset') >= 0) {
     } catch (e) {}
     location.replace(location.origin + location.pathname);   /* 去掉参数后重载 */
 }
-/* 数据版本号：版本变化时自动清空重置（兼容不支持 ?reset 的浏览器） */
-const DATA_VERSION = 'v20-2026-09-01-bg-gesture';
-{
-    let storedVersion = null;
-    try { storedVersion = localStorage.getItem('gaoding-xingkong-version'); } catch (e) {}
-    if (storedVersion !== DATA_VERSION) {
-        try {
-            localStorage.removeItem('gaoding-xingkong-todos');
-            localStorage.removeItem('gaoding-xingkong-stars');
-            localStorage.removeItem('gaoding-xingkong-guide');
-            localStorage.removeItem('gaoding-xingkong-demo-start');
-            localStorage.setItem('gaoding-xingkong-version', DATA_VERSION);
-        } catch (e) {}
-    }
-}
+/* 正式版：已移除"数据版本号变化即清空重置"，用户数据永久留存（可 ?reset 或连点重置按钮清空）。 */
 
 /* ================= 待办数据（固定 15 槽位；未完成的一直保留） ================= */
 const TODO_KEY = 'gaoding-xingkong-todos';
@@ -2247,6 +2240,14 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
 });
+</script>
+<script>
+/* PWA：注册 Service Worker（需 HTTPS / 本地 http；file:// 下不生效） */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('SW 注册失败', e); });
+    });
+}
 </script>
 </body>
 </html>
