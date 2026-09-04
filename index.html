@@ -2214,6 +2214,7 @@ const FUN_TEXTS = ['破 KPI，炸飞到外太空！','脑子已经离线，工�
 const FUN_KEY = 'gaoding-xingkong-fun';
 let funTodos = [];
 try { funTodos = JSON.parse(localStorage.getItem(FUN_KEY)) || []; } catch (e) {}
+let funTextCursor = Math.floor(Math.random() * 20);   /* 每轮起点随机，之后按顺序 */
 function saveFun() { try { localStorage.setItem(FUN_KEY, JSON.stringify(funTodos.filter(t => !t.done))); } catch (e) {} }
 let funFinishTimer = null;
 function spawnFunDiscs(n) {
@@ -2222,7 +2223,7 @@ function spawnFunDiscs(n) {
         funTodos.push({
             id: 'f' + Date.now().toString(36) + Math.floor(Math.random() * 999).toString(36),
             seq: funTodos.length + 1,
-            text: FUN_TEXTS[i % FUN_TEXTS.length],
+            text: FUN_TEXTS[(funTextCursor + i) % FUN_TEXTS.length],
             start: fmtTime(now),
             deadline: defaultDeadline(),
             deadlineDate: todayKey(),
@@ -2232,6 +2233,7 @@ function spawnFunDiscs(n) {
             fun: true
         });
     }
+    funTextCursor = (funTextCursor + n) % FUN_TEXTS.length;   /* 下一批接着顺序走 */
     saveFun();
     if (funActive) refreshCards();
     sfx.data();
@@ -2246,6 +2248,7 @@ function enterFun() {
     if (funActive) return;
     funActive = true;
     funBlastCount = 0;
+    funTextCursor = Math.floor(Math.random() * FUN_TEXTS.length);   /* 每轮开始起点随机 */
     todosBackup = todos;
     todos = funTodos;                          /* 替换：待办圆片隐藏，显示解压圆片 */
     refreshCards();
