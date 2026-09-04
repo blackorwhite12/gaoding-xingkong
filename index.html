@@ -280,6 +280,30 @@ body::after {
     transition: transform .15s; }
 #reset-btn:active { transform: scale(0.94); }
 #reset-btn.armed { color: #ff8a8a; text-shadow: 0 0 14px rgba(255,90,90,0.9), 0 0 36px rgba(255,90,90,0.5); }
+#fun-btn { position: fixed; right: 18px; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 220;
+    font-size: 12px; font-weight: 600; letter-spacing: 2px; cursor: pointer;
+    color: rgba(140,220,255,0.8); padding: 6px 10px; touch-action: none; user-select: none;
+    border: 1px solid rgba(0,170,255,0.4); border-radius: 5px; background: rgba(0,40,80,0.35);
+    box-shadow: 0 0 12px rgba(0,170,255,0.18); transition: all .2s; }
+#fun-btn:hover { color: #eaf9ff; border-color: rgba(0,220,255,0.85); box-shadow: 0 0 20px rgba(0,200,255,0.4); }
+#fun-btn:active { transform: scale(0.95); }
+#fun-overlay { z-index: 320; }
+.fun-panel { width: min(320px, 88vw); padding: 16px; text-align: center;
+    background: linear-gradient(165deg, rgba(0,45,90,0.95), rgba(0,18,40,0.97));
+    border: 1px solid rgba(0,180,255,0.7); border-radius: 8px;
+    box-shadow: 0 0 30px rgba(0,170,255,0.4), inset 0 0 22px rgba(0,170,255,0.12);
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%); }
+.fun-title { font-size: 15px; color: #cfefff; letter-spacing: 2px; margin-bottom: 4px; }
+.fun-sub { font-size: 11px; color: rgba(170,230,255,0.7); letter-spacing: 1px; margin-bottom: 12px; }
+.fun-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.fun-num { aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: #aae6ff; cursor: pointer;
+    border: 1px solid rgba(0,170,255,0.5); border-radius: 6px; background: rgba(0,30,65,0.6);
+    transition: all .15s; }
+.fun-num:hover { color: #fff; border-color: rgba(0,220,255,0.9); background: rgba(0,60,110,0.7); transform: translateY(-1px); }
+.fun-num:active { transform: scale(0.92); }
+.fun-close { margin: 12px auto 0; width: 90px; text-align: center; font-size: 12px; color: #ff8a8a;
+    border: 1px solid rgba(255,102,102,0.5); border-radius: 4px; padding: 5px 0; cursor: pointer; }
 
 /* ---------- 语音 / 键盘浮层 ---------- */
 .overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center;
@@ -484,7 +508,18 @@ body::after {
 </div>
 
 <!-- DEMO 专用重置按钮（正式版移除） -->
+<div id="fun-btn" title="只想炸着玩：生成 1~20 个解压圆片">🎯 只想炸着玩</div>
 <div id="reset-btn" title="重置全部数据（DEMO 专用）">重置</div>
+
+<!-- 只想炸着玩：选择数量 -->
+<div id="fun-overlay" class="overlay">
+    <div class="fun-panel">
+        <div class="fun-title">只想炸着玩</div>
+        <div class="fun-sub">选 1~20，自动生成解压圆片（炸了计入总数）</div>
+        <div class="fun-grid" id="fun-grid"></div>
+        <div class="fun-close" id="fun-close">关闭</div>
+    </div>
+</div>
 
 <!-- 语音输入浮层 -->
 <div id="voice-overlay" class="overlay">
@@ -2119,6 +2154,57 @@ document.getElementById('reset-btn').addEventListener('click', () => {
     } catch (e) {}
     location.reload();
 });
+
+/* ================= 只想炸着玩：批量生成解压圆片（真实待办，炸了计入总数） ================= */
+const FUN_TEXTS = ['先炸为敬','这破事 炸掉','老板画的饼 太硬了','emo 滚粗','改不完的需求','周一综合征',
+    '打卡下班','摸鱼一时爽','想去海边','奶茶续命','减十斤！','加薪！加薪！','睡个好觉','外卖到了','明天再说',
+    '洗把脸继续','狗都睡了','买买买','焦虑？炸掉','躺平一下'];
+function spawnFunDiscs(n) {
+    const slots = MAX_DISCS - activeTodos().length;
+    if (slots <= 0) { toast('待办已满（上限 ' + MAX_DISCS + ' 张），先炸掉一些再添加'); sfx.denied(); return; }
+    const make = Math.min(n, slots);
+    const now = new Date();
+    for (let i = 0; i < make; i++) {
+        todos.push({
+            id: 't' + Date.now().toString(36) + Math.floor(Math.random() * 999).toString(36),
+            seq: nextSeq(),
+            text: FUN_TEXTS[i % FUN_TEXTS.length],
+            start: fmtTime(now),
+            deadline: defaultDeadline(),
+            deadlineDate: todayKey(),
+            warnMin: 15,
+            done: false,
+            createdAt: now.toISOString()
+        });
+    }
+    saveTodos();
+    refreshCards();
+    scheduleReminders();
+    burstTarget = 0; fanOffset = 0;      /* 生成后收拢到正面，直接看到 */
+    toast('✦ 已生成 ' + make + ' 个解压圆片，炸吧！');
+    sfx.data();
+    if (make < n) toast('已是上限，本次生成 ' + make + ' 张');
+}
+document.getElementById('fun-btn').addEventListener('click', () => {
+    document.getElementById('fun-overlay').classList.add('show');
+});
+document.getElementById('fun-close').addEventListener('click', () => {
+    document.getElementById('fun-overlay').classList.remove('show');
+});
+document.getElementById('fun-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('fun-overlay')) document.getElementById('fun-overlay').classList.remove('show');
+});
+const funGrid = document.getElementById('fun-grid');
+for (let i = 1; i <= MAX_DISCS; i++) {
+    const el = document.createElement('div');
+    el.className = 'fun-num';
+    el.textContent = i;
+    el.addEventListener('click', () => {
+        document.getElementById('fun-overlay').classList.remove('show');
+        spawnFunDiscs(i);
+    });
+    funGrid.appendChild(el);
+}
 
 /* ================= DEMO 操作引导（重置后自动弹出） ================= */
 const GUIDE_KEY = 'gaoding-xingkong-guide';
