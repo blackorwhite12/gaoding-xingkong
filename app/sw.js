@@ -2,7 +2,7 @@
  * 每次发布新版时需同步 bump 这里的 CACHE 版本号，否则用户会命中旧缓存。
  * 策略：导航请求(navigate)走 network-first 再回退缓存，保证 index.html 能更新；
  *       其余同源静态资源走 cache-first，离线也能开。 */
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = 'gaoding-xingkong-' + VERSION;
 const SHELL = [
   './',
