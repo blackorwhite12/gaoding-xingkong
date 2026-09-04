@@ -773,12 +773,16 @@ function addCompletedStar(info) {
 function renderDate() {
     const d = new Date();
     const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
-    const realCount = completedStars.filter(s => !s.demo).length;   /* 示例星不计入正式总数 */
+    const realCount = completedStars.filter(s => !s.demo).length;   /* 示例星不计入正式总数；总数不设上限 */
+    const countStr = realCount.toLocaleString('en-US');            /* 千分位，更易读，位数再多也能放 */
+    const digits = countStr.length;                                 /* 位数变多 → 自动缩小字/字距，留出显示位置 */
+    const smFont = digits > 6 ? 7 : digits > 4 ? 8 : digits > 3 ? 9 : 10;
+    const smSpace = digits > 6 ? 1 : 2;
     document.getElementById('hud-date').innerHTML =
         `<span class="d-part" data-p="y">${d.getFullYear()}年</span>` +
         `<span class="d-part" data-p="m">${String(d.getMonth()+1).padStart(2,'0')}月</span>` +
         `<span class="d-part" data-p="d">${String(d.getDate()).padStart(2,'0')}日</span>` +
-        `<small>${week} · 炸星总数 ${realCount} · 永久留存</small>`;
+        `<small style="font-size:${smFont}px;letter-spacing:${smSpace}px;white-space:nowrap">${week} · 炸星总数 ${countStr} · 永久留存</small>`;
 }
 
 /* ================= 音效（Web Audio 合成） ================= */
